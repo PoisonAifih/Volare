@@ -224,7 +224,7 @@ class AppUpdater(
 
     private companion object {
         /** Change this if the releases repository is renamed. */
-        const val REPO = "PoisonAifih/OnTheFly-Release"
+        const val REPO = "PoisonAifih/OnTheFly-ApkRelease"
 
         const val API_BASE = "https://api.github.com"
         const val API_VERSION = "2022-11-28"

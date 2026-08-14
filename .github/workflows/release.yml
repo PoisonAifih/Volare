@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  RELEASES_REPO: PoisonAifih/OnTheFly-Release
+  RELEASES_REPO: PoisonAifih/OnTheFly-ApkRelease
 
 jobs:
   release:
@@ -47,10 +47,19 @@ jobs:
       - name: Build signed release APK
         env:
           ONTHEFLY_VERSION_CODE: ${{ steps.version.outputs.code }}
-          ONTHEFLY_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          ONTHEFLY_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          ONTHEFLY_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          ONTHEFLY_KEYSTORE_PASSWORD: ${{ secrets.ONTHEFLY_KEYSTORE_PASSWORD }}
+          ONTHEFLY_KEY_ALIAS: ${{ secrets.ONTHEFLY_KEY_ALIAS }}
+          ONTHEFLY_KEY_PASSWORD: ${{ secrets.ONTHEFLY_KEY_PASSWORD }}
         run: |
+          # An empty value here makes Gradle fail with the opaque "SigningConfig is missing
+          # required property" instead of naming the secret that is absent.
+          for name in ONTHEFLY_KEYSTORE_PASSWORD ONTHEFLY_KEY_ALIAS ONTHEFLY_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Secret $name belum diatur."
+              exit 1
+            fi
+          done
+
           export ONTHEFLY_KEYSTORE_PATH="$RUNNER_TEMP/release.jks"
           ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleRelease
 

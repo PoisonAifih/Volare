@@ -83,7 +83,7 @@ langsung di `app/build.gradle.kts`.
 ## Alur release dan update mandiri
 
 Setiap push ke `main` menjalankan `.github/workflows/release.yml`: APK ditandatangani
-dengan keystore dari secret, lalu diterbitkan ke repo private `PoisonAifih/OnTheFly-Release`
+dengan keystore dari secret, lalu diterbitkan ke repo private `PoisonAifih/OnTheFly-ApkRelease`
 bersama `latest.json`. Di HP, menu **Cek update** membaca `latest.json`, membandingkan
 `versionCode`, mengunduh APK, dan memasangnya lewat `PackageInstaller`.
 

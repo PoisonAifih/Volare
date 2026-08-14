@@ -68,7 +68,7 @@ karena pemasangnya adalah aplikasi itu sendiri; syaratnya izin
 `USER_ACTION_NOT_REQUIRED`, dan `targetSdk` yang cukup tinggi.
 
 Alurnya: setiap push ke `main` memicu workflow `release.yml`, yang membangun APK
-bertanda tangan dan menerbitkannya ke repo private `OnTheFly-Release` beserta
+bertanda tangan dan menerbitkannya ke repo private `OnTheFly-ApkRelease` beserta
 `latest.json`. Di HP, menu **Cek update** membaca `latest.json`, membandingkan
 `versionCode`, lalu mengunduh dan memasang.
 
@@ -94,10 +94,10 @@ Setup sekali di GitHub, pada repo ini:
 | Secret | Isi |
 | --- | --- |
 | `KEYSTORE_BASE64` | isi `keystore/release.jks.base64` |
-| `KEYSTORE_PASSWORD`, `KEY_PASSWORD`, `KEY_ALIAS` | dari `keystore/keystore.properties` |
-| `RELEASES_TOKEN` | PAT dengan izin `Contents: Read and write` di repo `OnTheFly-Release` |
+| `ONTHEFLY_KEYSTORE_PASSWORD`, `ONTHEFLY_KEY_PASSWORD`, `ONTHEFLY_KEY_ALIAS` | dari `keystore/keystore.properties` |
+| `RELEASES_TOKEN` | PAT dengan izin `Contents: Read and write` di repo `OnTheFly-ApkRelease` |
 
-Repo `OnTheFly-Release` perlu sudah punya commit awal. Untuk HP, buat token terpisah yang
+Repo `OnTheFly-ApkRelease` perlu sudah punya commit awal. Untuk HP, buat token terpisah yang
 hanya punya `Contents: Read` di repo itu, supaya token yang tersimpan di perangkat tidak
 bisa menulis apa pun.
 

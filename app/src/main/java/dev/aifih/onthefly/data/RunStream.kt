@@ -163,6 +163,7 @@ class RunStream(
             }
 
             // "heartbeat" keeps the connection alive and "interaction_update" duplicates the events
+            else -> null
         }
     }.getOrNull()
 
