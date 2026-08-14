@@ -16,6 +16,8 @@ bukan editor kode.
 - Mengirim follow-up ke agent yang sedang berjalan, dan membatalkan run.
 - Membuka pull request hasilnya di browser.
 - Notifikasi saat run berakhir, bahkan setelah kamu menutup layar detail.
+- Memperbarui dirinya sendiri dari HP lewat menu **Cek update**, tanpa kabel dan tanpa
+  Android Studio.
 
 ## Yang belum ada
 
@@ -58,10 +60,52 @@ tapi kalau HP hilang, cabut key-nya dari dashboard.
 Cloud Agents juga mensyaratkan plan berbayar dan source control yang sudah terhubung di
 [dashboard Integrations](https://cursor.com/dashboard/integrations).
 
+## Update dari HP
+
+Aplikasi bisa mengganti dirinya sendiri tanpa dialog konfirmasi. Android mengizinkannya
+karena pemasangnya adalah aplikasi itu sendiri; syaratnya izin
+`UPDATE_PACKAGES_WITHOUT_USER_ACTION`, sesi `PackageInstaller` dengan
+`USER_ACTION_NOT_REQUIRED`, dan `targetSdk` yang cukup tinggi.
+
+Alurnya: setiap push ke `main` memicu workflow `release.yml`, yang membangun APK
+bertanda tangan dan menerbitkannya ke repo private `OnTheFly-Release` beserta
+`latest.json`. Di HP, menu **Cek update** membaca `latest.json`, membandingkan
+`versionCode`, lalu mengunduh dan memasang.
+
+Karena repo release private, aplikasi memakai REST API GitHub dengan token read-only yang
+kamu tempel sekali di layar Update. `raw.githubusercontent.com` tidak dipakai karena tidak
+menerima autentikasi token. Unduhan asset dijawab dengan redirect ke penyimpanan
+ber-signature, dan header `Authorization` **tidak boleh** ikut ke sana, jadi redirect-nya
+diikuti manual di `AppUpdater`.
+
+Empat hal yang perlu diingat:
+
+- **Instalasi pertama tetap manual.** Silent install hanya berlaku untuk update.
+- **Kuncinya tidak boleh berubah.** Update hanya bisa memasang di atas versi lama bila
+  ditandatangani kunci yang sama. Keystore ada di `keystore/` dan tidak masuk git; kalau
+  hilang, HP harus uninstall lalu install ulang dari nol.
+- **Tanda tangan itu pengamannya, bukan privasi repo.** Karena update dipasang tanpa dialog,
+  yang mencegah APK asing terpasang adalah pemeriksaan tanda tangan Android.
+- **Silent tidak dijamin.** Sebagian ROM tetap memunculkan dialog, jadi aplikasi menangani
+  `STATUS_PENDING_USER_ACTION` dan meneruskan dialognya.
+
+Setup sekali di GitHub, pada repo ini:
+
+| Secret | Isi |
+| --- | --- |
+| `KEYSTORE_BASE64` | isi `keystore/release.jks.base64` |
+| `KEYSTORE_PASSWORD`, `KEY_PASSWORD`, `KEY_ALIAS` | dari `keystore/keystore.properties` |
+| `RELEASES_TOKEN` | PAT dengan izin `Contents: Read and write` di repo `OnTheFly-Release` |
+
+Repo `OnTheFly-Release` perlu sudah punya commit awal. Untuk HP, buat token terpisah yang
+hanya punya `Contents: Read` di repo itu, supaya token yang tersimpan di perangkat tidak
+bisa menulis apa pun.
+
 ## Struktur
 
-- `data/` — DTO, klien API OkHttp, streaming SSE, penyimpanan key, dan caching.
+- `data/` — DTO, klien API OkHttp, streaming SSE, penyimpanan rahasia terenkripsi, dan caching.
 - `ui/` — layar Compose beserta ViewModel-nya.
 - `service/RunWatchService.kt` — foreground service yang menjaga stream saat app di background.
+- `update/` — pembacaan `latest.json` dan pemasangan APK lewat `PackageInstaller`.
 
 Batasan versi dependensi dan aturan kontribusi ada di [AGENTS.md](AGENTS.md).

@@ -41,6 +41,7 @@ object Routes {
     const val API_KEY = "apiKey"
     const val AGENTS = "agents"
     const val NEW_AGENT = "newAgent"
+    const val UPDATE = "update"
     const val AGENT_DETAIL = "agent/{agentId}"
 
     fun agentDetail(agentId: String): String = "agent/$agentId"
@@ -66,6 +67,7 @@ private fun OnTheFlyNavHost() {
             AgentListScreen(
                 onNewAgent = { navController.navigate(Routes.NEW_AGENT) },
                 onOpenAgent = { agentId -> navController.navigate(Routes.agentDetail(agentId)) },
+                onCheckUpdates = { navController.navigate(Routes.UPDATE) },
                 onSignOut = {
                     ServiceLocator.apiKeyStore.clear()
                     navController.navigate(Routes.API_KEY) {
@@ -73,6 +75,10 @@ private fun OnTheFlyNavHost() {
                     }
                 },
             )
+        }
+
+        composable(Routes.UPDATE) {
+            UpdateScreen(onBack = { navController.popBackStack() })
         }
 
         composable(Routes.NEW_AGENT) {

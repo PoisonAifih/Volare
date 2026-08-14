@@ -1,0 +1,113 @@
+name: Release
+
+# Every push to main publishes a new build, so the phone can pull it with the in-app
+# "Cek update" button without touching a computer.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  RELEASES_REPO: PoisonAifih/OnTheFly-Release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Compute version
+        id: version
+        run: |
+          echo "code=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          echo "name=0.1.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          echo "tag=v0.1.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore signing keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::Secret KEYSTORE_BASE64 belum diatur. Update tidak akan bisa dipasang di atas versi lama tanpa kunci yang sama."
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+
+      - name: Build signed release APK
+        env:
+          ONTHEFLY_VERSION_CODE: ${{ steps.version.outputs.code }}
+          ONTHEFLY_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          ONTHEFLY_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          ONTHEFLY_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          export ONTHEFLY_KEYSTORE_PATH="$RUNNER_TEMP/release.jks"
+          ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleRelease
+
+      - name: Stage APK
+        id: apk
+        run: |
+          name="onthefly-${{ steps.version.outputs.name }}.apk"
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/$name"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "path=$RUNNER_TEMP/$name" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release to the releases repo
+        id: publish
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          # Passed through the environment so quotes or newlines in a commit message
+          # cannot break the shell command.
+          NOTES: ${{ github.event.head_commit.message || 'Manual release' }}
+        run: |
+          gh release create "${{ steps.version.outputs.tag }}" \
+            "${{ steps.apk.outputs.path }}" \
+            --repo "$RELEASES_REPO" \
+            --title "OnTheFly ${{ steps.version.outputs.name }}" \
+            --notes "$NOTES"
+
+          # The repo is private, so the phone downloads through the REST API and needs the
+          # asset id. Resolve it here to keep the app down to two requests.
+          asset_id=$(gh api \
+            "repos/$RELEASES_REPO/releases/tags/${{ steps.version.outputs.tag }}" \
+            --jq ".assets[] | select(.name == \"${{ steps.apk.outputs.name }}\") | .id")
+
+          if [ -z "$asset_id" ]; then
+            echo "::error::Asset id tidak ditemukan untuk ${{ steps.apk.outputs.name }}"
+            exit 1
+          fi
+
+          echo "asset_id=$asset_id" >> "$GITHUB_OUTPUT"
+
+      - name: Point latest.json at the new build
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+        run: |
+          git clone "https://x-access-token:$GH_TOKEN@github.com/$RELEASES_REPO.git" releases-repo
+          cd releases-repo
+
+          cat > latest.json <<JSON
+          {
+            "versionCode": ${{ steps.version.outputs.code }},
+            "versionName": "${{ steps.version.outputs.name }}",
+            "assetId": ${{ steps.publish.outputs.asset_id }},
+            "apkUrl": "https://github.com/$RELEASES_REPO/releases/download/${{ steps.version.outputs.tag }}/${{ steps.apk.outputs.name }}",
+            "publishedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          JSON
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add latest.json
+          git commit -m "Release ${{ steps.version.outputs.name }}"
+          git push

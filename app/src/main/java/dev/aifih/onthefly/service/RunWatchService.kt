@@ -19,13 +19,7 @@ import dev.aifih.onthefly.ui.MainActivity
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 
-/**
- * Keeps the SSE connection to one run alive after the user leaves the screen, then posts a
- * notification when the run terminates.
- *
- * This exists because the Cloud Agents API v1 has no webhooks yet. Once it does, the same
- * notification can be delivered through FCM and this service becomes optional.
- */
+
 class RunWatchService : LifecycleService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -85,7 +79,6 @@ class RunWatchService : LifecycleService() {
                 }
 
             if (!completed) {
-                // The stream ended without a terminal event; read the run once to be sure.
                 val run = runCatching { ServiceLocator.repository.getRun(agentId, runId) }.getOrNull()
                 if (run != null && RunStatus.isTerminal(run.status)) {
                     notifyTerminal(

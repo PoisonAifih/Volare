@@ -7,13 +7,7 @@ import kotlinx.serialization.json.Json
 class RefreshTooSoonException(val retryInSeconds: Long) :
     Exception("Tunggu $retryInSeconds detik lagi sebelum menyegarkan daftar repo")
 
-/**
- * Wraps [CursorApi] and adds the on-disk caching the phone needs.
- *
- * The repository list is the reason this layer exists: `GET /v1/repositories` allows only
- * 1 request per minute (30 per hour) and can take tens of seconds, which would make the
- * new-agent screen unusable if it were fetched on every visit.
- */
+
 class AgentRepository(
     private val api: CursorApi,
     private val prefs: SharedPreferences,

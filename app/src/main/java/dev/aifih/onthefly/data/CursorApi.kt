@@ -143,10 +143,7 @@ class CursorApi(
         return builder.build()
     }
 
-    /**
-     * Error bodies are not fully specified, so both `{ "error": { ... } }` and a flat
-     * `{ "code": ..., "message": ... }` are accepted before falling back to the raw text.
-     */
+
     private fun parseError(statusCode: Int, body: String): CursorApiException {
         val fallback = body.take(300).ifBlank { "HTTP $statusCode" }
 

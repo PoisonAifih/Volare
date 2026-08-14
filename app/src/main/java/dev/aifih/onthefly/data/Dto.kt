@@ -160,7 +160,6 @@ data class ModelListResponse(
 data class RepositoryItem(
     val url: String,
 ) {
-    /** `https://github.com/owner/name` renders as `owner/name`. */
     val shortName: String
         get() = url.removeSuffix("/")
             .removeSuffix(".git")
@@ -179,10 +178,7 @@ data class IdResponse(
     val id: String,
 )
 
-/**
- * Run status values documented for the Cloud Agents API. Anything unrecognised is
- * treated as non-terminal so the UI keeps streaming instead of stopping early.
- */
+
 object RunStatus {
     const val CREATING = "CREATING"
     const val RUNNING = "RUNNING"

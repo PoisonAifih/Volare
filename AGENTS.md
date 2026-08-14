@@ -49,9 +49,10 @@ langsung di `app/build.gradle.kts`.
 
 ## Yang tidak boleh dilakukan
 
-- Jangan pernah mencatat API key ke log, menaruhnya di `Intent` extra, atau menuliskannya
-  ke berkas biasa. Key hanya lewat `ApiKeyStore`, yang mengenkripsinya dengan kunci AES-GCM
-  di Android Keystore.
+- Jangan pernah mencatat API key atau token GitHub ke log, menaruhnya di `Intent` extra, atau
+ menuliskannya ke berkas biasa. Keduanya hanya lewat `SecretStore`, yang mengenkripsinya
+ dengan kunci AES-GCM di Android Keystore. Tiap rahasia punya alias sendiri, supaya mencabut
+ satu tidak membuat yang lain tidak terbaca.
 - Jangan memakai Jetpack Security (`EncryptedSharedPreferences`). Library itu deprecated
   dan sudah sengaja dilepas.
 - Jangan memanggil `GET /v1/repositories` di luar `AgentRepository`. Endpoint itu dibatasi
@@ -59,6 +60,11 @@ langsung di `app/build.gradle.kts`.
   cache lebih dulu.
 - Jangan menghapus penanganan `Last-Event-ID` di `RunStream`. Itu yang membuat transkrip
   tidak hilang saat HP berpindah antara Wi-Fi dan data seluler.
+- Jangan mengubah `applicationId` atau cara release ditandatangani. Kedua hal itu memutus
+  jalur update di HP yang sudah memasang aplikasi, dan satu-satunya pemulihannya adalah
+  uninstall manual.
+- Jangan menulis `versionCode` sebagai angka tetap. Nilainya datang dari
+  `ONTHEFLY_VERSION_CODE`, yang diisi CI dengan nomor run.
 
 ## Catatan API yang mudah terlewat
 
@@ -73,6 +79,39 @@ langsung di `app/build.gradle.kts`.
 - Webhook untuk API v1 belum ada. Karena itu notifikasi dikerjakan oleh
   `RunWatchService`, sebuah foreground service yang menjaga koneksi SSE saat layar detail
   ditutup. Kalau webhook sudah rilis, service ini bisa diganti FCM.
+
+## Alur release dan update mandiri
+
+Setiap push ke `main` menjalankan `.github/workflows/release.yml`: APK ditandatangani
+dengan keystore dari secret, lalu diterbitkan ke repo private `PoisonAifih/OnTheFly-Release`
+bersama `latest.json`. Di HP, menu **Cek update** membaca `latest.json`, membandingkan
+`versionCode`, mengunduh APK, dan memasangnya lewat `PackageInstaller`.
+
+Karena repo release private, semua permintaan lewat REST API GitHub dengan token read-only
+yang disimpan di `ServiceLocator.updateTokenStore`:
+
+- `latest.json` dibaca lewat `GET /repos/{repo}/contents/latest.json` dengan
+ `Accept: application/vnd.github.raw`. Jangan kembali ke `raw.githubusercontent.com`, karena
+ host itu tidak menerima autentikasi token.
+- APK diunduh lewat `GET /repos/{repo}/releases/assets/{id}` dengan
+ `Accept: application/octet-stream`. Endpoint itu menjawab 302 ke penyimpanan
+ ber-signature, dan **header `Authorization` tidak boleh ikut** ke tujuan redirect, kalau
+ tidak akan ditolak dengan "only one auth mechanism allowed". Karena itu `AppUpdater`
+ memakai client `followRedirects(false)` dan menyusun ulang permintaan tanpa header auth.
+- `assetId` diisi CI ke `latest.json`, jadi aplikasi cukup dua permintaan. Untuk repo
+ private, `404` bisa berarti file tidak ada **atau** token tidak punya akses.
+
+- Instalasi berjalan tanpa dialog karena aplikasi memasang dirinya sendiri, memegang
+  `UPDATE_PACKAGES_WITHOUT_USER_ACTION`, dan memakai `USER_ACTION_NOT_REQUIRED`. Sistem
+  masih boleh meminta konfirmasi, jadi `InstallResultReceiver` wajib tetap menangani
+  `STATUS_PENDING_USER_ACTION` dan meneruskan `Intent.EXTRA_INTENT`.
+- `PendingIntent` untuk status sesi **harus** `FLAG_MUTABLE`. Tanpa itu sistem tidak bisa
+  menyisipkan extra status dan hasil instalasi tidak pernah sampai.
+- Di dalam blok `signingConfigs`, jangan menamai variabel lokal `keyAlias` atau
+  `keyPassword`. Nama itu diselesaikan ke properti `SigningConfig` sehingga nilainya jadi
+  null dan build gagal dengan pesan "missing required property".
+- URL `latest.json` ada sebagai konstanta di `AppUpdater`. Kalau repo release diganti nama,
+  ubah di situ dan di `RELEASES_REPO` pada workflow.
 
 ## Definisi selesai
 

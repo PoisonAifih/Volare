@@ -10,4 +10,10 @@ captures/
 *.apk
 *.aab
 *.keystore
+*.jks
+keystore.properties
 !debug.keystore
+
+# Release signing material. Losing this means the phone can no longer install updates
+# over the existing build.
+/keystore/

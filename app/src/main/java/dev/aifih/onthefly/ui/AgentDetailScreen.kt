@@ -258,8 +258,6 @@ fun AgentDetailScreen(agentId: String, onBack: () -> Unit) {
 
     LaunchedEffect(Unit) { RunWatchService.stop(context) }
 
-    // While this screen is gone, a foreground service keeps the stream open so the
-    // "agent finished" notification still arrives.
     DisposableEffect(Unit) {
         onDispose {
             val current = latest

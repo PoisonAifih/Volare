@@ -24,17 +24,10 @@ sealed interface RunEvent {
 
     data class Completed(val status: String, val text: String?, val git: GitInfo?) : RunEvent
 
-    /** [expired] means the retention window elapsed; read terminal state with `GET run` instead. */
     data class Failed(val message: String, val expired: Boolean = false) : RunEvent
 }
 
-/**
- * Streams one run as Server-Sent Events.
- *
- * Reconnects transparently using `Last-Event-ID` so a phone switching between Wi-Fi and
- * mobile data does not lose the transcript. A `410` means the stream retention window has
- * passed, which is not retryable — the caller should fall back to reading the run directly.
- */
+
 class RunStream(
     private val api: CursorApi,
     private val client: OkHttpClient,
@@ -121,7 +114,6 @@ class RunStream(
                     }
 
                     result.code == 400 && lastEventId != null -> {
-                        // invalid_last_event_id: restart the stream from the beginning.
                         lastEventId = null
                         attempt++
                     }
@@ -170,9 +162,7 @@ class RunStream(
                 RunEvent.Failed(it.message ?: it.code ?: "Stream error")
             }
 
-            // "heartbeat" keeps the connection alive and "interaction_update" duplicates the
-            // simplified events above, so both are ignored.
-            else -> null
+            // "heartbeat" keeps the connection alive and "interaction_update" duplicates the events
         }
     }.getOrNull()
 

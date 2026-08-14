@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-# Sets up the Android SDK for Cursor Cloud Agents.
-#
-# Cursor runs this on every Build, on top of the previous disk state, so every step here
-# must be safe to repeat.
 set -euo pipefail
 
 SDK_ROOT="${ANDROID_SDK_ROOT:-$HOME/android-sdk}"

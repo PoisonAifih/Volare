@@ -7,6 +7,22 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+// CI passes the run number so every published build outranks the previous one. Local
+// builds stay at 1, which is fine because they are never published.
+val appVersionCode = (System.getenv("ONTHEFLY_VERSION_CODE") ?: "1").toInt()
+
+// Release signing is only configured when all four values are present, so a plain
+// `assembleRelease` on a machine without the keystore still works (signed with debug).
+// Deliberately not named `keyAlias`/`keyPassword`: inside the signingConfigs block those
+// names resolve to SigningConfig's own properties, silently assigning null.
+val signingStorePath: String? = System.getenv("ONTHEFLY_KEYSTORE_PATH")
+val signingStorePassword: String? = System.getenv("ONTHEFLY_KEYSTORE_PASSWORD")
+val signingKeyAlias: String? = System.getenv("ONTHEFLY_KEY_ALIAS")
+val signingKeyPassword: String? = System.getenv("ONTHEFLY_KEY_PASSWORD")
+val hasReleaseSigning =
+    listOf(signingStorePath, signingStorePassword, signingKeyAlias, signingKeyPassword)
+        .none { it.isNullOrBlank() }
+
 android {
     namespace = "dev.aifih.onthefly"
     compileSdk = 36
@@ -15,8 +31,19 @@ android {
         applicationId = "dev.aifih.onthefly"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = appVersionCode
+        versionName = "0.1.$appVersionCode"
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(signingStorePath!!)
+                storePassword = signingStorePassword
+                keyAlias = signingKeyAlias
+                keyPassword = signingKeyPassword
+            }
+        }
     }
 
     buildTypes {
@@ -26,6 +53,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            signingConfig = if (hasReleaseSigning) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 
