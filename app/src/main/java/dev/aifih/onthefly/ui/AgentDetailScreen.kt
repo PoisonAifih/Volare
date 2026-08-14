@@ -1,0 +1,478 @@
+package dev.aifih.onthefly.ui
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import dev.aifih.onthefly.ServiceLocator
+import dev.aifih.onthefly.data.Agent
+import dev.aifih.onthefly.data.CursorApiException
+import dev.aifih.onthefly.data.Run
+import dev.aifih.onthefly.data.RunEvent
+import dev.aifih.onthefly.data.RunStatus
+import dev.aifih.onthefly.service.RunWatchService
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+
+data class ToolLine(val callId: String, val name: String, val status: String)
+
+data class AgentDetailUiState(
+    val agent: Agent? = null,
+    val run: Run? = null,
+    val status: String? = null,
+    val transcript: String = "",
+    val tools: List<ToolLine> = emptyList(),
+    val followUp: String = "",
+    val loading: Boolean = true,
+    val sending: Boolean = false,
+    val cancelling: Boolean = false,
+    val error: String? = null,
+    val notice: String? = null,
+) {
+    val isActive: Boolean get() = status != null && !RunStatus.isTerminal(status)
+
+    val agentName: String get() = agent?.name ?: agent?.id ?: "Agent"
+
+    val prUrl: String? get() = run?.git?.branches?.firstNotNullOfOrNull { it.prUrl }
+
+    val branch: String? get() = run?.git?.branches?.firstNotNullOfOrNull { it.branch }
+}
+
+class AgentDetailViewModel(private val agentId: String) : ViewModel() {
+
+    private val repository = ServiceLocator.repository
+
+    private val _state = MutableStateFlow(AgentDetailUiState())
+    val state: StateFlow<AgentDetailUiState> = _state.asStateFlow()
+
+    private var streamJob: Job? = null
+    private val transcript = StringBuilder()
+
+    init {
+        load()
+    }
+
+    fun load() {
+        _state.update { it.copy(loading = true, error = null) }
+
+        viewModelScope.launch {
+            val agent = runCatching { repository.getAgent(agentId) }.getOrElse { cause ->
+                _state.update {
+                    it.copy(loading = false, error = cause.message ?: "Gagal memuat agent")
+                }
+                return@launch
+            }
+
+            _state.update { it.copy(agent = agent, loading = false) }
+
+            val runId = agent.latestRunId
+            if (runId == null) {
+                _state.update { it.copy(status = null) }
+                return@launch
+            }
+
+            val run = runCatching { repository.getRun(agentId, runId) }.getOrNull()
+            if (run != null) {
+                _state.update { it.copy(run = run, status = run.status) }
+
+                if (RunStatus.isTerminal(run.status)) {
+                    run.result?.let { appendTranscript(it) }
+                } else {
+                    startStreaming(runId)
+                }
+            }
+        }
+    }
+
+    private fun startStreaming(runId: String) {
+        streamJob?.cancel()
+        streamJob = viewModelScope.launch {
+            ServiceLocator.runStream.stream(agentId, runId).collect { event ->
+                when (event) {
+                    is RunEvent.Status -> _state.update { it.copy(status = event.status) }
+
+                    is RunEvent.Assistant -> appendTranscript(event.text)
+
+                    is RunEvent.Thinking -> Unit
+
+                    is RunEvent.Tool -> _state.update { current ->
+                        val existing = current.tools.indexOfFirst { it.callId == event.callId }
+                        val line = ToolLine(event.callId, event.name, event.status)
+
+                        val tools = if (existing >= 0) {
+                            current.tools.toMutableList().also { it[existing] = line }
+                        } else {
+                            current.tools + line
+                        }
+
+                        current.copy(tools = tools.takeLast(MAX_TOOL_LINES))
+                    }
+
+                    is RunEvent.Completed -> {
+                        event.text?.let { appendTranscript("\n\n$it") }
+                        _state.update { it.copy(status = event.status) }
+                        reloadRun(runId)
+                    }
+
+                    is RunEvent.Failed -> if (event.expired) {
+                        reloadRun(runId)
+                    } else {
+                        _state.update { it.copy(error = event.message) }
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun reloadRun(runId: String) {
+        val run = runCatching { repository.getRun(agentId, runId) }.getOrNull() ?: return
+        _state.update { it.copy(run = run, status = run.status) }
+    }
+
+    private fun appendTranscript(text: String) {
+        transcript.append(text)
+        _state.update { it.copy(transcript = transcript.toString()) }
+    }
+
+    fun onFollowUpChange(value: String) = _state.update { it.copy(followUp = value, notice = null) }
+
+    fun sendFollowUp() {
+        val prompt = _state.value.followUp.trim()
+        if (prompt.isEmpty() || _state.value.sending) return
+
+        _state.update { it.copy(sending = true, error = null, notice = null) }
+
+        viewModelScope.launch {
+            runCatching { repository.createRun(agentId, prompt) }.fold(
+                onSuccess = { run ->
+                    appendTranscript("\n\n> $prompt\n\n")
+                    _state.update {
+                        it.copy(
+                            sending = false,
+                            followUp = "",
+                            run = run,
+                            status = run.status,
+                            tools = emptyList(),
+                        )
+                    }
+                    startStreaming(run.id)
+                },
+                onFailure = { cause ->
+                    val busy = cause is CursorApiException && cause.isAgentBusy
+                    _state.update {
+                        it.copy(
+                            sending = false,
+                            notice = if (busy) {
+                                "Agent masih mengerjakan run sebelumnya. Tunggu selesai atau batalkan dulu."
+                            } else {
+                                null
+                            },
+                            error = if (busy) null else cause.message ?: "Gagal mengirim follow-up",
+                        )
+                    }
+                },
+            )
+        }
+    }
+
+    fun cancel() {
+        val runId = _state.value.run?.id ?: return
+        _state.update { it.copy(cancelling = true) }
+
+        viewModelScope.launch {
+            runCatching { repository.cancelRun(agentId, runId) }
+                .onFailure { cause ->
+                    _state.update { it.copy(error = cause.message) }
+                }
+
+            _state.update { it.copy(cancelling = false) }
+            reloadRun(runId)
+        }
+    }
+
+    fun stopStreaming() {
+        streamJob?.cancel()
+        streamJob = null
+    }
+
+    private companion object {
+        const val MAX_TOOL_LINES = 6
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AgentDetailScreen(agentId: String, onBack: () -> Unit) {
+    val viewModel: AgentDetailViewModel = viewModel(
+        factory = viewModelFactory {
+            initializer { AgentDetailViewModel(agentId) }
+        },
+    )
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val latest by rememberUpdatedState(state)
+
+    LaunchedEffect(Unit) { RunWatchService.stop(context) }
+
+    // While this screen is gone, a foreground service keeps the stream open so the
+    // "agent finished" notification still arrives.
+    DisposableEffect(Unit) {
+        onDispose {
+            val current = latest
+            val runId = current.run?.id
+            if (current.isActive && runId != null) {
+                RunWatchService.start(context, agentId, runId, current.agentName)
+            }
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = state.agentName,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali")
+                    }
+                },
+                actions = {
+                    state.agent?.url?.let { url ->
+                        TextButton(onClick = { context.openUrl(url) }) {
+                            Text("Web")
+                        }
+                    }
+                },
+            )
+        },
+        bottomBar = {
+            FollowUpBar(
+                value = state.followUp,
+                sending = state.sending,
+                onValueChange = viewModel::onFollowUpChange,
+                onSend = viewModel::sendFollowUp,
+            )
+        },
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 16.dp),
+        ) {
+            if (state.loading) {
+                CircularProgressIndicator(Modifier.padding(24.dp))
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                StatusBadge(state.status)
+                Spacer(Modifier.weight(1f))
+
+                formatDuration(state.run?.durationMs)?.let { duration ->
+                    Text(
+                        text = duration,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                if (state.isActive) {
+                    Spacer(Modifier.width(8.dp))
+                    OutlinedButton(
+                        onClick = viewModel::cancel,
+                        enabled = !state.cancelling,
+                    ) {
+                        Text(if (state.cancelling) "Membatalkan…" else "Batalkan")
+                    }
+                }
+            }
+
+            state.notice?.let { notice ->
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = notice,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            state.error?.let { error ->
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = error,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+
+            if (state.tools.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                ToolActivity(state.tools)
+            }
+
+            if (state.branch != null || state.prUrl != null) {
+                Spacer(Modifier.height(8.dp))
+                ResultLinks(
+                    branch = state.branch,
+                    prUrl = state.prUrl,
+                    onOpenPr = { url -> context.openUrl(url) },
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(12.dp))
+
+            Transcript(
+                text = state.transcript,
+                active = state.isActive,
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun Transcript(text: String, active: Boolean, modifier: Modifier = Modifier) {
+    val scrollState = rememberScrollState()
+
+    LaunchedEffect(text.length) {
+        if (active) scrollState.animateScrollTo(scrollState.maxValue)
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .verticalScroll(scrollState),
+    ) {
+        Text(
+            text = text.ifBlank {
+                if (active) "Menunggu agent mulai bicara…" else "Belum ada transkrip."
+            },
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun ToolActivity(tools: List<ToolLine>) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            tools.forEach { tool ->
+                Text(
+                    text = "${if (tool.status == "completed") "✓" else "…"} ${tool.name}",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ResultLinks(branch: String?, prUrl: String?, onOpenPr: (String) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        branch?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodySmall,
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        prUrl?.let { url ->
+            OutlinedButton(onClick = { onOpenPr(url) }) {
+                Text("Buka pull request")
+            }
+        }
+    }
+}
+
+@Composable
+private fun FollowUpBar(
+    value: String,
+    sending: Boolean,
+    onValueChange: (String) -> Unit,
+    onSend: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = { Text("Kirim follow-up…") },
+            maxLines = 4,
+            modifier = Modifier.weight(1f),
+        )
+
+        Spacer(Modifier.width(8.dp))
+
+        IconButton(onClick = onSend, enabled = !sending && value.isNotBlank()) {
+            if (sending) {
+                CircularProgressIndicator(Modifier.height(18.dp), strokeWidth = 2.dp)
+            } else {
+                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Kirim")
+            }
+        }
+    }
+}
