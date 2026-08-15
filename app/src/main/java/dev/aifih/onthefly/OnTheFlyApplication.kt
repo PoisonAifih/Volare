@@ -19,20 +19,21 @@ class OnTheFlyApplication : Application() {
         manager.createNotificationChannel(
             NotificationChannel(
                 CHANNEL_RUN_FINISHED,
-                "Agent selesai",
+                "Agent finished",
                 NotificationManager.IMPORTANCE_HIGH,
             ).apply {
-                description = "Memberi tahu saat run agent berakhir"
+                description = "Notifies you when an agent run ends"
             },
         )
 
         manager.createNotificationChannel(
             NotificationChannel(
                 CHANNEL_RUN_WATCH,
-                "Memantau agent",
+                "Watching agent",
                 NotificationManager.IMPORTANCE_LOW,
             ).apply {
-                description = "Notifikasi permanen selama app menjaga koneksi ke run yang berjalan"
+                description = "Ongoing notification while the app keeps a connection to a " +
+                    "running agent"
                 setShowBadge(false)
             },
         )

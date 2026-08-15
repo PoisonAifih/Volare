@@ -84,7 +84,7 @@ class AgentListViewModel : ViewModel() {
                 },
                 onFailure = { cause ->
                     _state.update {
-                        it.copy(loading = false, error = cause.message ?: "Gagal memuat agent")
+                        it.copy(loading = false, error = cause.message ?: "Could not load agents")
                     }
                 },
             )
@@ -137,11 +137,11 @@ fun AgentListScreen(
                 title = { Text("Agents") },
                 actions = {
                     IconButton(onClick = viewModel::refresh) {
-                        Icon(Icons.Filled.Refresh, contentDescription = "Segarkan")
+                        Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
                     }
 
                     IconButton(onClick = { menuExpanded = true }) {
-                        Icon(Icons.Filled.MoreVert, contentDescription = "Menu lain")
+                        Icon(Icons.Filled.MoreVert, contentDescription = "More options")
                     }
 
                     DropdownMenu(
@@ -149,14 +149,14 @@ fun AgentListScreen(
                         onDismissRequest = { menuExpanded = false },
                     ) {
                         DropdownMenuItem(
-                            text = { Text("Cek update") },
+                            text = { Text("Check for updates") },
                             onClick = {
                                 menuExpanded = false
                                 onCheckUpdates()
                             },
                         )
                         DropdownMenuItem(
-                            text = { Text("Cabut API key") },
+                            text = { Text("Revoke API key") },
                             leadingIcon = {
                                 Icon(
                                     Icons.AutoMirrored.Filled.ExitToApp,
@@ -174,7 +174,7 @@ fun AgentListScreen(
         },
         floatingActionButton = {
             FloatingActionButton(onClick = onNewAgent) {
-                Icon(Icons.Filled.Add, contentDescription = "Agent baru")
+                Icon(Icons.Filled.Add, contentDescription = "New agent")
             }
         },
     ) { padding ->
@@ -191,7 +191,7 @@ fun AgentListScreen(
                 state.agents.isEmpty() -> {
                     EmptyOrError(
                         message = state.error
-                            ?: "Belum ada agent. Tekan tombol tambah untuk mengirim prompt pertama.",
+                            ?: "No agents yet. Tap the add button to send your first prompt.",
                         isError = state.error != null,
                         onRetry = viewModel::refresh,
                         modifier = Modifier.align(Alignment.Center),
@@ -224,7 +224,7 @@ fun AgentListScreen(
                                     enabled = !state.loadingMore,
                                     modifier = Modifier.fillMaxWidth(),
                                 ) {
-                                    Text(if (state.loadingMore) "Memuat…" else "Muat lebih banyak")
+                                    Text(if (state.loadingMore) "Loading…" else "Load more")
                                 }
                             }
                         }
@@ -292,7 +292,7 @@ private fun EmptyOrError(
 
         if (isError) {
             Spacer(Modifier.height(12.dp))
-            OutlinedButton(onClick = onRetry) { Text("Coba lagi") }
+            OutlinedButton(onClick = onRetry) { Text("Try again") }
         }
     }
 }

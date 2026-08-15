@@ -16,7 +16,7 @@ import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 
-class MissingApiKeyException : IOException("API key belum diatur")
+class MissingApiKeyException : IOException("No API key configured")
 
 class CursorApiException(
     val statusCode: Int,
@@ -130,7 +130,7 @@ class CursorApi(
                 throw CursorApiException(
                     statusCode = response.code,
                     errorCode = null,
-                    message = "Respons tidak bisa dibaca: ${cause.message}",
+                    message = "Could not read the response: ${cause.message}",
                 )
             }
         }

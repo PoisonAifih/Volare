@@ -5,7 +5,7 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 
 class RefreshTooSoonException(val retryInSeconds: Long) :
-    Exception("Tunggu $retryInSeconds detik lagi sebelum menyegarkan daftar repo")
+    Exception("Wait $retryInSeconds more seconds before refreshing the repository list")
 
 
 class AgentRepository(

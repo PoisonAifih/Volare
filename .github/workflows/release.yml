@@ -20,6 +20,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Runs before the build so a token problem costs seconds instead of a full build. The
+      # publish step would otherwise fail with a bare 404, which GitHub returns instead of 403
+      # so that it does not reveal whether a private repo exists.
+      - name: Verify releases token
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::Secret RELEASES_TOKEN belum diatur."
+            exit 1
+          fi
+
+          if ! gh api "repos/$RELEASES_REPO" --jq .full_name > /dev/null 2>&1; then
+            echo "::error::RELEASES_TOKEN tidak bisa melihat $RELEASES_REPO. Pada fine-grained token, pastikan repo itu ada di Repository access dan izin Contents-nya Read and write."
+            exit 1
+          fi
+
+          if [ "$(gh api "repos/$RELEASES_REPO" --jq .permissions.push)" != "true" ]; then
+            echo "::error::RELEASES_TOKEN hanya punya akses baca ke $RELEASES_REPO. Naikkan izin Contents menjadi Read and write."
+            exit 1
+          fi
+
+          echo "Token oke untuk $RELEASES_REPO"
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

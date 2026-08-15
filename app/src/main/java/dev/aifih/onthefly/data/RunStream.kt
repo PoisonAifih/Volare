@@ -101,7 +101,7 @@ class RunStream(
                     result.code == 410 -> {
                         send(
                             RunEvent.Failed(
-                                message = "Stream sudah kedaluwarsa, memuat status akhir",
+                                message = "The stream expired, loading the final status",
                                 expired = true,
                             ),
                         )
@@ -109,7 +109,7 @@ class RunStream(
                     }
 
                     result.code == 401 || result.code == 403 -> {
-                        send(RunEvent.Failed("API key ditolak"))
+                        send(RunEvent.Failed("API key rejected"))
                         break
                     }
 
@@ -121,7 +121,7 @@ class RunStream(
                     attempt >= MAX_RETRIES -> {
                         send(
                             RunEvent.Failed(
-                                result.message ?: "Koneksi stream terputus",
+                                result.message ?: "The stream connection was lost",
                             ),
                         )
                         break

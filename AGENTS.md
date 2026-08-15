@@ -44,8 +44,8 @@ langsung di `app/build.gradle.kts`.
 - Semua DTO memakai `ignoreUnknownKeys` dan properti opsional bernilai default. API-nya
   masih public beta, jadi field baru tidak boleh membuat parsing gagal.
 - Status run yang tidak dikenal **tidak** dianggap terminal. Lihat `RunStatus.isTerminal`.
-- Teks yang dilihat pengguna ditulis dalam bahasa Indonesia. Identifier, pesan error
-  internal, dan nama file dalam bahasa Inggris.
+- Teks yang dilihat pengguna ditulis dalam bahasa Inggris, sama seperti identifier, pesan
+ error internal, dan nama file.
 
 ## Yang tidak boleh dilakukan
 

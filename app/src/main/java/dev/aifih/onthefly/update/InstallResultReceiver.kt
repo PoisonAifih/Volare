@@ -43,22 +43,22 @@ class InstallResultReceiver : BroadcastReceiver() {
 
         return when (status) {
             PackageInstaller.STATUS_FAILURE_CONFLICT ->
-                "Tanda tangan APK berbeda dari versi yang terpasang. Uninstall aplikasi " +
-                    "lalu pasang APK baru sekali secara manual."
+                "The APK signature differs from the installed version. Uninstall the app, " +
+                    "then install the new APK manually once."
 
-            PackageInstaller.STATUS_FAILURE_ABORTED -> "Instalasi dibatalkan"
+            PackageInstaller.STATUS_FAILURE_ABORTED -> "Installation cancelled"
 
             PackageInstaller.STATUS_FAILURE_INCOMPATIBLE ->
-                "APK tidak kompatibel dengan perangkat ini"
+                "The APK is not compatible with this device"
 
-            PackageInstaller.STATUS_FAILURE_STORAGE -> "Ruang penyimpanan tidak cukup"
+            PackageInstaller.STATUS_FAILURE_STORAGE -> "Not enough storage space"
 
-            PackageInstaller.STATUS_FAILURE_INVALID -> "APK rusak atau tidak valid"
+            PackageInstaller.STATUS_FAILURE_INVALID -> "The APK is corrupt or invalid"
 
             PackageInstaller.STATUS_FAILURE_BLOCKED ->
-                "Instalasi diblokir oleh sistem atau kebijakan perangkat"
+                "Installation blocked by the system or device policy"
 
-            else -> detail ?: "Instalasi gagal (kode $status)"
+            else -> detail ?: "Installation failed (code $status)"
         }
     }
 

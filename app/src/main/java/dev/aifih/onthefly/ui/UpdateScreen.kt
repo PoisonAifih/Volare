@@ -106,14 +106,15 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
                     is InstallEvent.Success -> _state.update {
                         it.copy(
                             phase = UpdatePhase.UP_TO_DATE,
-                            message = "Update terpasang. Aplikasi akan memakai versi baru.",
+                            message = "Update installed. The app will use the new version.",
                         )
                     }
 
                     is InstallEvent.PendingUserAction -> _state.update {
                         it.copy(
                             phase = UpdatePhase.PENDING_USER_ACTION,
-                            message = "Sistem meminta konfirmasi. Setujui dialog instalasinya.",
+                            message = "The system is asking for confirmation. " +
+                                "Approve the install dialog.",
                         )
                     }
 
@@ -159,7 +160,7 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
                         is UpdateCheck.UpToDate -> _state.update {
                             it.copy(
                                 phase = UpdatePhase.UP_TO_DATE,
-                                message = "Sudah versi terbaru.",
+                                message = "You are on the latest version.",
                             )
                         }
 
@@ -176,7 +177,7 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
                     _state.update {
                         it.copy(
                             phase = UpdatePhase.FAILED,
-                            message = cause.message ?: "Gagal memeriksa update",
+                            message = cause.message ?: "Could not check for updates",
                         )
                     }
                 },
@@ -201,7 +202,7 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
                 _state.update {
                     it.copy(
                         phase = UpdatePhase.FAILED,
-                        message = cause.message ?: "Gagal memasang update",
+                        message = cause.message ?: "Could not install the update",
                     )
                 }
             }
@@ -225,7 +226,7 @@ fun UpdateScreen(onBack: () -> Unit) {
                 title = { Text("Update") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
             )
@@ -239,7 +240,7 @@ fun UpdateScreen(onBack: () -> Unit) {
                 .padding(16.dp),
         ) {
             Text(
-                text = "Versi terpasang ${state.currentVersionName} (${state.currentVersionCode})",
+                text = "Installed version ${state.currentVersionName} (${state.currentVersionCode})",
                 style = MaterialTheme.typography.bodyMedium,
             )
 
@@ -249,12 +250,12 @@ fun UpdateScreen(onBack: () -> Unit) {
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp)) {
                         Text(
-                            text = "Aplikasi belum diizinkan memasang APK",
+                            text = "The app is not allowed to install APKs yet",
                             style = MaterialTheme.typography.titleSmall,
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            text = "Tanpa izin ini, update tidak bisa dipasang sendiri.",
+                            text = "Without this permission, updates cannot install themselves.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -268,7 +269,7 @@ fun UpdateScreen(onBack: () -> Unit) {
                                 }
                             },
                         ) {
-                            Text("Buka pengaturan")
+                            Text("Open settings")
                         }
                     }
                 }
@@ -279,12 +280,12 @@ fun UpdateScreen(onBack: () -> Unit) {
             if (state.hasToken) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "Token GitHub tersimpan",
+                        text = "GitHub token saved",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.weight(1f),
                     )
-                    TextButton(onClick = viewModel::clearToken) { Text("Ganti") }
+                    TextButton(onClick = viewModel::clearToken) { Text("Replace") }
                 }
 
                 Spacer(Modifier.height(8.dp))
@@ -292,13 +293,13 @@ fun UpdateScreen(onBack: () -> Unit) {
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp)) {
                         Text(
-                            text = "Token GitHub diperlukan",
+                            text = "A GitHub token is required",
                             style = MaterialTheme.typography.titleSmall,
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            text = "Repo release bersifat private. Buat fine-grained token " +
-                                "dengan izin Contents: Read untuk repo itu saja.",
+                            text = "The release repository is private. Create a fine-grained " +
+                                "token with Contents: Read for that repository only.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -327,7 +328,7 @@ fun UpdateScreen(onBack: () -> Unit) {
                             },
                             enabled = tokenInput.isNotBlank(),
                         ) {
-                            Text("Simpan token")
+                            Text("Save token")
                         }
                     }
                 }
@@ -340,7 +341,7 @@ fun UpdateScreen(onBack: () -> Unit) {
                     Card(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(16.dp)) {
                             Text(
-                                text = "Versi baru ${manifest.versionName} (${manifest.versionCode})",
+                                text = "New version ${manifest.versionName} (${manifest.versionCode})",
                                 style = MaterialTheme.typography.titleSmall,
                             )
 
@@ -373,8 +374,8 @@ fun UpdateScreen(onBack: () -> Unit) {
 
                 Text(
                     text = when (state.phase) {
-                        UpdatePhase.DOWNLOADING -> "Mengunduh… ${(state.progress * 100).toInt()}%"
-                        else -> "Memasang…"
+                        UpdatePhase.DOWNLOADING -> "Downloading… ${(state.progress * 100).toInt()}%"
+                        else -> "Installing…"
                     },
                     style = MaterialTheme.typography.bodySmall,
                 )
@@ -406,7 +407,7 @@ fun UpdateScreen(onBack: () -> Unit) {
                     enabled = !busy,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("Unduh dan pasang")
+                    Text("Download and install")
                 }
 
                 Spacer(Modifier.height(8.dp))
@@ -417,7 +418,7 @@ fun UpdateScreen(onBack: () -> Unit) {
                 enabled = !busy && state.hasToken,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(if (state.phase == UpdatePhase.CHECKING) "Memeriksa…" else "Cek update")
+                Text(if (state.phase == UpdatePhase.CHECKING) "Checking…" else "Check for updates")
             }
         }
     }

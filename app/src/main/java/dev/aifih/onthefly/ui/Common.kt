@@ -23,18 +23,21 @@ fun Context.openUrl(url: String) {
 
 fun formatRelative(isoTimestamp: String?): String {
     val instant = isoTimestamp?.let { runCatching { Instant.parse(it) }.getOrNull() }
-        ?: return "waktu tidak diketahui"
+        ?: return "unknown time"
 
     val seconds = Duration.between(instant, Instant.now()).seconds
 
     return when {
-        seconds < 0 -> "baru saja"
-        seconds < 60 -> "baru saja"
-        seconds < 3600 -> "${seconds / 60} menit lalu"
-        seconds < 86_400 -> "${seconds / 3600} jam lalu"
-        else -> "${seconds / 86_400} hari lalu"
+        seconds < 0 -> "just now"
+        seconds < 60 -> "just now"
+        seconds < 3600 -> ago(seconds / 60, "minute")
+        seconds < 86_400 -> ago(seconds / 3600, "hour")
+        else -> ago(seconds / 86_400, "day")
     }
 }
+
+private fun ago(count: Long, unit: String): String =
+    if (count == 1L) "1 $unit ago" else "$count ${unit}s ago"
 
 fun formatDuration(millis: Long?): String? {
     if (millis == null || millis <= 0) return null

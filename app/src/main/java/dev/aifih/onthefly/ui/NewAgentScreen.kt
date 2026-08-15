@@ -128,7 +128,7 @@ class NewAgentViewModel : ViewModel() {
                         it.copy(
                             repos = repos,
                             refreshingRepos = false,
-                            notice = "Daftar repo diperbarui (${repos.size})",
+                            notice = "Repository list updated (${repos.size})",
                         )
                     }
                 },
@@ -137,8 +137,8 @@ class NewAgentViewModel : ViewModel() {
                     if (cause is RefreshTooSoonException) {
                         _state.update {
                             it.copy(
-                                notice = "Endpoint repo dibatasi 1 permintaan per menit. " +
-                                    "Coba lagi dalam ${cause.retryInSeconds} detik.",
+                                notice = "The repository endpoint allows 1 request per minute. " +
+                                    "Try again in ${cause.retryInSeconds} seconds.",
                             )
                         }
                     } else {
@@ -152,11 +152,11 @@ class NewAgentViewModel : ViewModel() {
     fun submit(onCreated: (String) -> Unit) {
         val current = _state.value
         if (current.prompt.isBlank()) {
-            _state.update { it.copy(error = "Prompt masih kosong") }
+            _state.update { it.copy(error = "Prompt is empty") }
             return
         }
         if (current.selectedRepoUrl.isNullOrBlank()) {
-            _state.update { it.copy(error = "Pilih repo dulu") }
+            _state.update { it.copy(error = "Pick a repository first") }
             return
         }
 
@@ -185,7 +185,7 @@ class NewAgentViewModel : ViewModel() {
                     _state.update {
                         it.copy(
                             submitting = false,
-                            error = cause.message ?: "Gagal membuat agent",
+                            error = cause.message ?: "Could not create the agent",
                         )
                     }
                 },
@@ -194,7 +194,7 @@ class NewAgentViewModel : ViewModel() {
     }
 
     private fun reportRepoFailure(cause: Throwable) {
-        _state.update { it.copy(error = cause.message ?: "Gagal memuat daftar repo") }
+        _state.update { it.copy(error = cause.message ?: "Could not load the repository list") }
     }
 }
 
@@ -209,10 +209,10 @@ fun NewAgentScreen(onBack: () -> Unit, onCreated: (String) -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Agent baru") },
+                title = { Text("New agent") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
             )
@@ -229,7 +229,7 @@ fun NewAgentScreen(onBack: () -> Unit, onCreated: (String) -> Unit) {
                 value = state.prompt,
                 onValueChange = viewModel::onPromptChange,
                 label = { Text("Prompt") },
-                placeholder = { Text("Contoh: perbaiki validasi login lalu tambahkan test") },
+                placeholder = { Text("For example: fix login validation and add tests") },
                 minLines = 4,
                 isError = state.error != null,
                 modifier = Modifier.fillMaxWidth(),
@@ -244,7 +244,7 @@ fun NewAgentScreen(onBack: () -> Unit, onCreated: (String) -> Unit) {
                     if (state.refreshingRepos) {
                         CircularProgressIndicator(Modifier.height(16.dp), strokeWidth = 2.dp)
                     } else {
-                        Icon(Icons.Filled.Refresh, contentDescription = "Segarkan daftar repo")
+                        Icon(Icons.Filled.Refresh, contentDescription = "Refresh repository list")
                     }
                 }
             }
@@ -254,7 +254,7 @@ fun NewAgentScreen(onBack: () -> Unit, onCreated: (String) -> Unit) {
                     .firstOrNull { it.url == state.selectedRepoUrl }
                     ?.shortName
                     ?: state.selectedRepoUrl
-                    ?: "Pilih repo",
+                    ?: "Pick a repository",
                 options = state.repos.map { it.shortName to it.url },
                 onSelect = { url -> url?.let(viewModel::onRepoSelected) },
             )
@@ -262,8 +262,8 @@ fun NewAgentScreen(onBack: () -> Unit, onCreated: (String) -> Unit) {
             if (state.repos.isEmpty()) {
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = "Daftar repo belum ter-cache. Tekan ikon segarkan sekali, lalu " +
-                        "tunggu — endpoint ini bisa perlu puluhan detik.",
+                    text = "The repository list is not cached yet. Tap refresh once and wait — " +
+                        "this endpoint can take tens of seconds.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -274,7 +274,7 @@ fun NewAgentScreen(onBack: () -> Unit, onCreated: (String) -> Unit) {
             OutlinedTextField(
                 value = state.startingRef,
                 onValueChange = viewModel::onStartingRefChange,
-                label = { Text("Branch awal") },
+                label = { Text("Starting branch") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -287,8 +287,8 @@ fun NewAgentScreen(onBack: () -> Unit, onCreated: (String) -> Unit) {
                 label = state.models
                     .firstOrNull { it.id == state.selectedModelId }
                     ?.label
-                    ?: "Default akun",
-                options = listOf("Default akun" to null) +
+                    ?: "Account default",
+                options = listOf("Account default" to null) +
                     state.models.map { it.label to it.id },
                 onSelect = viewModel::onModelSelected,
             )
@@ -297,9 +297,9 @@ fun NewAgentScreen(onBack: () -> Unit, onCreated: (String) -> Unit) {
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Buat PR otomatis", style = MaterialTheme.typography.bodyMedium)
+                    Text("Create PR automatically", style = MaterialTheme.typography.bodyMedium)
                     Text(
-                        text = "Direkomendasikan: PR jauh lebih mudah direview dari HP",
+                        text = "Recommended: a PR is far easier to review from a phone",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -321,7 +321,7 @@ fun NewAgentScreen(onBack: () -> Unit, onCreated: (String) -> Unit) {
                 FilterChip(
                     selected = state.planMode,
                     onClick = { viewModel.onPlanModeChange(true) },
-                    label = { Text("Plan dulu") },
+                    label = { Text("Plan first") },
                 )
             }
 
@@ -350,7 +350,7 @@ fun NewAgentScreen(onBack: () -> Unit, onCreated: (String) -> Unit) {
                 enabled = !state.submitting,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(if (state.submitting) "Mengirim…" else "Jalankan agent")
+                Text(if (state.submitting) "Sending…" else "Run agent")
             }
 
             Spacer(Modifier.height(32.dp))
@@ -377,7 +377,7 @@ private fun PickerField(
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             if (options.isEmpty()) {
                 DropdownMenuItem(
-                    text = { Text("Belum ada pilihan") },
+                    text = { Text("No options yet") },
                     onClick = { expanded = false },
                 )
             }

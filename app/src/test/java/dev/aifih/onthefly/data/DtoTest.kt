@@ -71,7 +71,7 @@ class DtoTest {
     @Test
     fun `create request omits null fields so the server applies its defaults`() {
         val request = CreateAgentRequest(
-            prompt = Prompt("perbaiki login"),
+            prompt = Prompt("fix login"),
             repos = listOf(RepoRef(url = "https://github.com/owner/repo", startingRef = "main")),
         )
 

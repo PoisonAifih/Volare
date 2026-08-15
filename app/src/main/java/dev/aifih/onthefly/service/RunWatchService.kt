@@ -97,7 +97,7 @@ class RunWatchService : LifecycleService() {
     private fun ongoingNotification(agentName: String): Notification =
         NotificationCompat.Builder(this, OnTheFlyApplication.CHANNEL_RUN_WATCH)
             .setSmallIcon(R.drawable.ic_stat_agent)
-            .setContentTitle("Memantau agent")
+            .setContentTitle("Watching agent")
             .setContentText(agentName)
             .setOngoing(true)
             .setSilent(true)
@@ -113,10 +113,10 @@ class RunWatchService : LifecycleService() {
         val manager = getSystemService<NotificationManager>() ?: return
 
         val title = when (status.uppercase()) {
-            RunStatus.FINISHED -> "Agent selesai"
-            RunStatus.CANCELLED -> "Agent dibatalkan"
-            RunStatus.EXPIRED -> "Agent kedaluwarsa"
-            else -> "Agent gagal"
+            RunStatus.FINISHED -> "Agent finished"
+            RunStatus.CANCELLED -> "Agent cancelled"
+            RunStatus.EXPIRED -> "Agent expired"
+            else -> "Agent failed"
         }
 
         val body = text?.take(400)?.ifBlank { null } ?: agentName

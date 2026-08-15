@@ -100,7 +100,7 @@ class AppUpdater(
         onProgress: (Float) -> Unit,
     ): File = withContext(Dispatchers.IO) {
         val assetId = manifest.assetId
-            ?: throw IOException("latest.json tidak menyertakan assetId, jadi APK-nya tidak bisa diunduh")
+            ?: throw IOException("latest.json has no assetId, so the APK cannot be downloaded")
 
         val target = File(context.cacheDir, "update-${manifest.versionCode}.apk")
         if (target.exists()) target.delete()
@@ -142,7 +142,7 @@ class AppUpdater(
         first.close()
 
         if (location.isNullOrBlank()) {
-            throw IOException("GitHub mengarahkan unduhan tanpa alamat tujuan")
+            throw IOException("GitHub redirected the download without a target address")
         }
 
         // Deliberately unauthenticated: the redirect target carries its own signature.
@@ -161,15 +161,15 @@ class AppUpdater(
 
     private fun describe(response: Response): IOException = IOException(
         when (response.code) {
-            401 -> "Token GitHub tidak valid atau sudah kedaluwarsa."
+            401 -> "The GitHub token is invalid or has expired."
 
-            403 -> "Token GitHub ditolak. Pastikan izinnya Contents: Read untuk repo $REPO."
+            403 -> "GitHub token rejected. Make sure it has Contents: Read for repo $REPO."
 
             // On a private repo GitHub returns 404 both for a missing file and for a token
             // without access, so the message has to cover both.
-            404 -> "Belum ada release, atau token tidak punya akses ke repo $REPO."
+            404 -> "There is no release yet, or the token has no access to repo $REPO."
 
-            else -> "Gagal menghubungi GitHub (HTTP ${response.code})"
+            else -> "Could not reach GitHub (HTTP ${response.code})"
         },
     )
 
@@ -234,4 +234,4 @@ class AppUpdater(
 }
 
 class MissingUpdateTokenException :
-    IOException("Token GitHub belum diisi, jadi update tidak bisa diperiksa.")
+    IOException("No GitHub token set, so updates cannot be checked.")

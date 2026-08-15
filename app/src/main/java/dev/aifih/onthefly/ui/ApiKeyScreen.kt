@@ -58,7 +58,7 @@ class ApiKeyViewModel : ViewModel() {
     fun connect(onConnected: () -> Unit) {
         val key = _state.value.apiKey.trim()
         if (key.isEmpty()) {
-            _state.update { it.copy(error = "API key masih kosong") }
+            _state.update { it.copy(error = "API key is empty") }
             return
         }
 
@@ -87,10 +87,11 @@ class ApiKeyViewModel : ViewModel() {
 
     private fun describe(cause: Throwable): String = when {
         cause is CursorApiException && cause.isUnauthorized ->
-            "API key ditolak. Pastikan kamu menyalin key dari Cursor Dashboard, bukan token lain."
+            "API key rejected. Make sure you copied the key from the Cursor Dashboard, " +
+                "not some other token."
 
         cause is CursorApiException -> cause.message
-        else -> cause.message ?: "Gagal menghubungi api.cursor.com"
+        else -> cause.message ?: "Could not reach api.cursor.com"
     }
 }
 
@@ -113,8 +114,8 @@ fun ApiKeyScreen(onConnected: () -> Unit) {
             Spacer(Modifier.height(8.dp))
 
             Text(
-                text = "Jalankan Cursor Cloud Agents dari HP. Tempel API key dari Cursor " +
-                    "Dashboard untuk mulai.",
+                text = "Run Cursor Cloud Agents from your phone. Paste an API key from the " +
+                    "Cursor Dashboard to get started.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -160,7 +161,7 @@ fun ApiKeyScreen(onConnected: () -> Unit) {
                         strokeWidth = 2.dp,
                     )
                 } else {
-                    Text("Hubungkan")
+                    Text("Connect")
                 }
             }
 
@@ -170,15 +171,15 @@ fun ApiKeyScreen(onConnected: () -> Unit) {
                 onClick = { context.openUrl(DASHBOARD_API_KEYS_URL) },
                 modifier = Modifier.align(Alignment.CenterHorizontally),
             ) {
-                Text("Buka Dashboard → API Keys")
+                Text("Open Dashboard → API Keys")
             }
 
             Spacer(Modifier.height(24.dp))
 
             Text(
-                text = "Key disimpan terenkripsi di perangkat ini saja. Key ini memberi akses " +
-                    "penuh ke cloud agent akunmu, jadi kalau HP hilang, cabut key-nya dari " +
-                    "dashboard.",
+                text = "The key is stored encrypted on this device only. It grants full access " +
+                    "to your account's cloud agents, so if you lose the phone, revoke the key " +
+                    "from the dashboard.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

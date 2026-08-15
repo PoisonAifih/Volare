@@ -102,7 +102,7 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
         viewModelScope.launch {
             val agent = runCatching { repository.getAgent(agentId) }.getOrElse { cause ->
                 _state.update {
-                    it.copy(loading = false, error = cause.message ?: "Gagal memuat agent")
+                    it.copy(loading = false, error = cause.message ?: "Could not load the agent")
                 }
                 return@launch
             }
@@ -131,6 +131,8 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
     private fun startStreaming(runId: String) {
         streamJob?.cancel()
         streamJob = viewModelScope.launch {
+            var settled = false
+
             ServiceLocator.runStream.stream(agentId, runId).collect { event ->
                 when (event) {
                     is RunEvent.Status -> _state.update { it.copy(status = event.status) }
@@ -153,24 +155,49 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
                     }
 
                     is RunEvent.Completed -> {
+                        settled = true
                         event.text?.let { appendTranscript("\n\n$it") }
                         _state.update { it.copy(status = event.status) }
                         reloadRun(runId)
                     }
 
-                    is RunEvent.Failed -> if (event.expired) {
-                        reloadRun(runId)
-                    } else {
-                        _state.update { it.copy(error = event.message) }
+                    is RunEvent.Failed -> {
+                        settled = true
+                        settle(runId, if (event.expired) null else event.message)
                     }
                 }
             }
+
+            if (!settled) settle(runId, null)
         }
     }
 
     private suspend fun reloadRun(runId: String) {
         val run = runCatching { repository.getRun(agentId, runId) }.getOrNull() ?: return
         _state.update { it.copy(run = run, status = run.status) }
+    }
+
+    /**
+     * The stream is best effort: it can end on an error event or simply close before the run
+     * reports a result. GET run is authoritative, so reconcile against it and only surface the
+     * stream error when the run really is still going.
+     */
+    private suspend fun settle(runId: String, streamError: String?) {
+        val run = runCatching { repository.getRun(agentId, runId) }.getOrNull()
+        val terminal = run != null && RunStatus.isTerminal(run.status)
+
+        // Only when nothing streamed, otherwise the result shows up twice.
+        if (terminal && transcript.isBlank()) {
+            run.result?.let { appendTranscript(it) }
+        }
+
+        _state.update {
+            it.copy(
+                run = run ?: it.run,
+                status = run?.status ?: it.status,
+                error = if (terminal) null else streamError ?: it.error,
+            )
+        }
     }
 
     private fun appendTranscript(text: String) {
@@ -207,11 +234,16 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
                         it.copy(
                             sending = false,
                             notice = if (busy) {
-                                "Agent masih mengerjakan run sebelumnya. Tunggu selesai atau batalkan dulu."
+                                "The agent is still working on the previous run. " +
+                                    "Wait for it to finish or cancel it first."
                             } else {
                                 null
                             },
-                            error = if (busy) null else cause.message ?: "Gagal mengirim follow-up",
+                            error = if (busy) {
+                                null
+                            } else {
+                                cause.message ?: "Could not send the follow-up"
+                            },
                         )
                     }
                 },
@@ -280,7 +312,7 @@ fun AgentDetailScreen(agentId: String, onBack: () -> Unit) {
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
@@ -331,7 +363,7 @@ fun AgentDetailScreen(agentId: String, onBack: () -> Unit) {
                         onClick = viewModel::cancel,
                         enabled = !state.cancelling,
                     ) {
-                        Text(if (state.cancelling) "Membatalkan…" else "Batalkan")
+                        Text(if (state.cancelling) "Cancelling…" else "Cancel")
                     }
                 }
             }
@@ -396,7 +428,7 @@ private fun Transcript(text: String, active: Boolean, modifier: Modifier = Modif
     ) {
         Text(
             text = text.ifBlank {
-                if (active) "Menunggu agent mulai bicara…" else "Belum ada transkrip."
+                if (active) "Waiting for the agent to start talking…" else "No transcript yet."
             },
             style = MaterialTheme.typography.bodyMedium,
         )
@@ -436,7 +468,7 @@ private fun ResultLinks(branch: String?, prUrl: String?, onOpenPr: (String) -> U
 
         prUrl?.let { url ->
             OutlinedButton(onClick = { onOpenPr(url) }) {
-                Text("Buka pull request")
+                Text("Open pull request")
             }
         }
     }
@@ -458,7 +490,7 @@ private fun FollowUpBar(
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
-            placeholder = { Text("Kirim follow-up…") },
+            placeholder = { Text("Send a follow-up…") },
             maxLines = 4,
             modifier = Modifier.weight(1f),
         )
@@ -469,7 +501,7 @@ private fun FollowUpBar(
             if (sending) {
                 CircularProgressIndicator(Modifier.height(18.dp), strokeWidth = 2.dp)
             } else {
-                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Kirim")
+                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
             }
         }
     }
