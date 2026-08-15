@@ -7,7 +7,6 @@ data class UpdateManifest(
     val versionCode: Long,
     val versionName: String,
 
-    val assetId: Long? = null,
     val apkUrl: String? = null,
     val notes: String? = null,
     val publishedAt: String? = null,

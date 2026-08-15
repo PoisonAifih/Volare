@@ -49,10 +49,13 @@ langsung di `app/build.gradle.kts`.
 
 ## Yang tidak boleh dilakukan
 
-- Jangan pernah mencatat API key atau token GitHub ke log, menaruhnya di `Intent` extra, atau
- menuliskannya ke berkas biasa. Keduanya hanya lewat `SecretStore`, yang mengenkripsinya
- dengan kunci AES-GCM di Android Keystore. Tiap rahasia punya alias sendiri, supaya mencabut
- satu tidak membuat yang lain tidak terbaca.
+- Jangan pernah mencatat API key ke log, menaruhnya di `Intent` extra, atau menuliskannya ke
+ berkas biasa. Key itu hanya lewat `SecretStore`, yang mengenkripsinya dengan kunci AES-GCM
+ di Android Keystore. Tiap rahasia punya alias sendiri, supaya mencabut satu tidak membuat
+ yang lain tidak terbaca.
+- Jangan menyimpan apa pun yang berasal dari satu akun di luar `onthefly_cache`. Sign out
+ memanggil `AgentRepository.clearCache()`, yang mengosongkan seluruh berkas itu, supaya
+ akun berikutnya di HP yang sama tidak melihat daftar repo akun sebelumnya.
 - Jangan memakai Jetpack Security (`EncryptedSharedPreferences`). Library itu deprecated
   dan sudah sengaja dilepas.
 - Jangan memanggil `GET /v1/repositories` di luar `AgentRepository`. Endpoint itu dibatasi
@@ -83,23 +86,26 @@ langsung di `app/build.gradle.kts`.
 ## Alur release dan update mandiri
 
 Setiap push ke `main` menjalankan `.github/workflows/release.yml`: APK ditandatangani
-dengan keystore dari secret, lalu diterbitkan ke repo private `PoisonAifih/OnTheFly-ApkRelease`
-bersama `latest.json`. Di HP, menu **Cek update** membaca `latest.json`, membandingkan
+dengan keystore dari secret, lalu diterbitkan ke repo publik `PoisonAifih/OnTheFly-ApkRelease`
+bersama `latest.json`. Di HP, menu **Check for updates** membaca `latest.json`, membandingkan
 `versionCode`, mengunduh APK, dan memasangnya lewat `PackageInstaller`.
 
-Karena repo release private, semua permintaan lewat REST API GitHub dengan token read-only
-yang disimpan di `ServiceLocator.updateTokenStore`:
+Repo release bersifat publik, jadi kedua permintaan itu anonim dan tidak ada token sama
+sekali di jalur update:
 
-- `latest.json` dibaca lewat `GET /repos/{repo}/contents/latest.json` dengan
- `Accept: application/vnd.github.raw`. Jangan kembali ke `raw.githubusercontent.com`, karena
- host itu tidak menerima autentikasi token.
-- APK diunduh lewat `GET /repos/{repo}/releases/assets/{id}` dengan
- `Accept: application/octet-stream`. Endpoint itu menjawab 302 ke penyimpanan
- ber-signature, dan **header `Authorization` tidak boleh ikut** ke tujuan redirect, kalau
- tidak akan ditolak dengan "only one auth mechanism allowed". Karena itu `AppUpdater`
- memakai client `followRedirects(false)` dan menyusun ulang permintaan tanpa header auth.
-- `assetId` diisi CI ke `latest.json`, jadi aplikasi cukup dua permintaan. Untuk repo
- private, `404` bisa berarti file tidak ada **atau** token tidak punya akses.
+- `latest.json` dibaca dari `https://raw.githubusercontent.com/{repo}/main/latest.json`.
+ Host itu di belakang CDN yang bisa menyajikan salinan lama beberapa menit, jadi rilis baru
+ bisa telat terlihat. Itu wajar; jangan menggantinya dengan REST API GitHub, karena
+ permintaan anonim ke sana dibatasi 60 per jam per IP.
+- APK diunduh langsung dari `apkUrl` di `latest.json`. Redirect ke penyimpanan
+ ber-signature diikuti OkHttp seperti biasa, aman karena tidak ada header autentikasi yang
+ bisa ikut terbawa.
+- Yang menjaga jalur ini tetap aman bukan kerahasiaan repo, melainkan tanda tangan APK.
+ Paket dengan kunci lain akan ditolak sistem saat dipasang di atas versi yang ada.
+- CI masih menulis `assetId` ke `latest.json` walau aplikasi tidak lagi membacanya. Build
+ lama menolak manifest tanpa field itu, jadi menghapusnya sekarang membuat HP yang belum
+ update tidak bisa mengunduh APK penggantinya. Hapus setelah semua HP sudah lewat rilis
+ pertama pasca-switch.
 
 - Instalasi berjalan tanpa dialog karena aplikasi memasang dirinya sendiri, memegang
   `UPDATE_PACKAGES_WITHOUT_USER_ACTION`, dan memakai `USER_ACTION_NOT_REQUIRED`. Sistem

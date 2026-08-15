@@ -18,7 +18,6 @@ class UpdateManifestTest {
             {
               "versionCode": 42,
               "versionName": "0.1.42",
-              "assetId": 987654321,
               "apkUrl": "https://github.com/o/r/releases/download/v0.1.42/onthefly-0.1.42.apk",
               "publishedAt": "2026-08-14T08:00:00Z"
             }
@@ -28,23 +27,27 @@ class UpdateManifestTest {
 
         assertEquals(42L, manifest.versionCode)
         assertEquals("0.1.42", manifest.versionName)
-        assertEquals(987654321L, manifest.assetId)
+        assertEquals(
+            "https://github.com/o/r/releases/download/v0.1.42/onthefly-0.1.42.apk",
+            manifest.apkUrl,
+        )
         assertNull(manifest.notes)
     }
 
     @Test
-    fun `manifest from before the private switch has no asset id`() {
+    fun `assetId left over from the private repo era is ignored`() {
         val payload = """
             {
               "versionCode": 41,
               "versionName": "0.1.41",
+              "assetId": 987654321,
               "apkUrl": "https://example.com/a.apk"
             }
         """.trimIndent()
 
         val manifest = json.decodeFromString(UpdateManifest.serializer(), payload)
 
-        assertNull(manifest.assetId)
+        assertEquals("https://example.com/a.apk", manifest.apkUrl)
     }
 
     @Test

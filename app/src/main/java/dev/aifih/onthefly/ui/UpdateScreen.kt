@@ -3,14 +3,12 @@ package dev.aifih.onthefly.ui
 import android.app.Application
 import android.content.Intent
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -22,22 +20,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -74,19 +64,15 @@ data class UpdateUiState(
     val progress: Float = 0f,
     val message: String? = null,
     val needsUnknownSourcesPermission: Boolean = false,
-    val hasToken: Boolean = false,
 )
 
 class UpdateViewModel(application: Application) : AndroidViewModel(application) {
-
-    private val tokenStore = ServiceLocator.updateTokenStore
 
     // Built here rather than in ServiceLocator so no Context is held in a static field.
     private val updater = AppUpdater(
         context = application,
         client = ServiceLocator.httpClient,
         json = ServiceLocator.json,
-        tokenProvider = { tokenStore.get() },
     )
 
     private val _state = MutableStateFlow(
@@ -94,7 +80,6 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
             currentVersionName = updater.currentVersionName,
             currentVersionCode = updater.currentVersionCode,
             needsUnknownSourcesPermission = !updater.canRequestInstalls(),
-            hasToken = tokenStore.isConfigured(),
         ),
     )
     val state: StateFlow<UpdateUiState> = _state.asStateFlow()
@@ -131,24 +116,6 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun unknownSourcesSettingsIntent(): Intent = updater.unknownSourcesSettingsIntent()
-
-    fun saveToken(token: String) {
-        tokenStore.save(token)
-        _state.update {
-            it.copy(
-                hasToken = tokenStore.isConfigured(),
-                phase = UpdatePhase.IDLE,
-                message = null,
-            )
-        }
-    }
-
-    fun clearToken() {
-        tokenStore.clear()
-        _state.update {
-            it.copy(hasToken = false, phase = UpdatePhase.IDLE, manifest = null, message = null)
-        }
-    }
 
     fun check() {
         _state.update { it.copy(phase = UpdatePhase.CHECKING, message = null) }
@@ -216,7 +183,6 @@ fun UpdateScreen(onBack: () -> Unit) {
     val viewModel: UpdateViewModel = viewModel()
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    var tokenInput by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) { viewModel.refreshPermissionState() }
 
@@ -270,65 +236,6 @@ fun UpdateScreen(onBack: () -> Unit) {
                             },
                         ) {
                             Text("Open settings")
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(16.dp))
-            }
-
-            if (state.hasToken) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "GitHub token saved",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f),
-                    )
-                    TextButton(onClick = viewModel::clearToken) { Text("Replace") }
-                }
-
-                Spacer(Modifier.height(8.dp))
-            } else {
-                Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(16.dp)) {
-                        Text(
-                            text = "A GitHub token is required",
-                            style = MaterialTheme.typography.titleSmall,
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = "The release repository is private. Create a fine-grained " +
-                                "token with Contents: Read for that repository only.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-
-                        Spacer(Modifier.height(12.dp))
-
-                        OutlinedTextField(
-                            value = tokenInput,
-                            onValueChange = { tokenInput = it },
-                            label = { Text("github_pat_…") },
-                            singleLine = true,
-                            visualTransformation = PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Password,
-                                autoCorrectEnabled = false,
-                            ),
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-
-                        Spacer(Modifier.height(12.dp))
-
-                        Button(
-                            onClick = {
-                                viewModel.saveToken(tokenInput)
-                                tokenInput = ""
-                            },
-                            enabled = tokenInput.isNotBlank(),
-                        ) {
-                            Text("Save token")
                         }
                     }
                 }
@@ -415,7 +322,7 @@ fun UpdateScreen(onBack: () -> Unit) {
 
             OutlinedButton(
                 onClick = viewModel::check,
-                enabled = !busy && state.hasToken,
+                enabled = !busy,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(if (state.phase == UpdatePhase.CHECKING) "Checking…" else "Check for updates")

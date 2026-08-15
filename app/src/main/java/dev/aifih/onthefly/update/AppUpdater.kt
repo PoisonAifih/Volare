@@ -30,28 +30,14 @@ import okhttp3.Response
  * releases with a fixed keystore rather than the per-machine debug key. That signature check
  * is what protects this channel: an APK from anywhere else simply fails to install.
  *
- * The releases repository is private, so every request carries a read-only GitHub token and
- * goes through the REST API. `raw.githubusercontent.com` is not usable here because it does
- * not accept token authentication.
+ * The releases repository is public, so both requests are anonymous. That keeps the app off
+ * the GitHub API and its unauthenticated rate limit entirely.
  */
 class AppUpdater(
     private val context: Context,
     private val client: OkHttpClient,
     private val json: Json,
-    private val tokenProvider: () -> String?,
 ) {
-
-    /**
-     * Asset downloads answer with a 302 to pre-signed storage. The redirect must be followed
-     * by hand, because forwarding the GitHub token to that host makes it reject the request
-     * with "only one auth mechanism allowed".
-     */
-    private val noRedirectClient: OkHttpClient by lazy {
-        client.newBuilder()
-            .followRedirects(false)
-            .followSslRedirects(false)
-            .build()
-    }
 
     val currentVersionCode: Long
         get() = runCatching {
@@ -73,8 +59,9 @@ class AppUpdater(
         }.getOrDefault("")
 
     suspend fun check(): UpdateCheck = withContext(Dispatchers.IO) {
-        val request = authorized("$API_BASE/repos/$REPO/contents/$MANIFEST_FILE?ref=main")
-            .header("Accept", "application/vnd.github.raw")
+        val request = Request.Builder()
+            .url(MANIFEST_URL)
+            .header("Accept", "application/json")
             .cacheControl(CacheControl.FORCE_NETWORK)
             .build()
 
@@ -99,13 +86,15 @@ class AppUpdater(
         manifest: UpdateManifest,
         onProgress: (Float) -> Unit,
     ): File = withContext(Dispatchers.IO) {
-        val assetId = manifest.assetId
-            ?: throw IOException("latest.json has no assetId, so the APK cannot be downloaded")
+        val apkUrl = manifest.apkUrl?.takeIf { it.isNotBlank() }
+            ?: throw IOException("latest.json has no apkUrl, so the APK cannot be downloaded")
 
         val target = File(context.cacheDir, "update-${manifest.versionCode}.apk")
         if (target.exists()) target.delete()
 
-        openAsset(assetId).use { response ->
+        // Redirects to signed storage are followed by OkHttp. Nothing is attached to the
+        // request, so there is no credential to leak to the redirect target.
+        client.newCall(Request.Builder().url(apkUrl).build()).execute().use { response ->
             if (!response.isSuccessful) throw describe(response)
 
             val total = response.body.contentLength()
@@ -130,44 +119,9 @@ class AppUpdater(
         target
     }
 
-    private fun openAsset(assetId: Long): Response {
-        val request = authorized("$API_BASE/repos/$REPO/releases/assets/$assetId")
-            .header("Accept", "application/octet-stream")
-            .build()
-
-        val first = noRedirectClient.newCall(request).execute()
-        if (!first.isRedirect) return first
-
-        val location = first.header("Location")
-        first.close()
-
-        if (location.isNullOrBlank()) {
-            throw IOException("GitHub redirected the download without a target address")
-        }
-
-        // Deliberately unauthenticated: the redirect target carries its own signature.
-        return client.newCall(Request.Builder().url(location).build()).execute()
-    }
-
-    private fun authorized(url: String): Request.Builder {
-        val token = tokenProvider()?.takeIf { it.isNotBlank() }
-            ?: throw MissingUpdateTokenException()
-
-        return Request.Builder()
-            .url(url)
-            .header("Authorization", "Bearer $token")
-            .header("X-GitHub-Api-Version", API_VERSION)
-    }
-
     private fun describe(response: Response): IOException = IOException(
         when (response.code) {
-            401 -> "The GitHub token is invalid or has expired."
-
-            403 -> "GitHub token rejected. Make sure it has Contents: Read for repo $REPO."
-
-            // On a private repo GitHub returns 404 both for a missing file and for a token
-            // without access, so the message has to cover both.
-            404 -> "There is no release yet, or the token has no access to repo $REPO."
+            404 -> "No release published in $REPO yet."
 
             else -> "Could not reach GitHub (HTTP ${response.code})"
         },
@@ -226,12 +180,12 @@ class AppUpdater(
         /** Change this if the releases repository is renamed. */
         const val REPO = "PoisonAifih/OnTheFly-ApkRelease"
 
-        const val API_BASE = "https://api.github.com"
-        const val API_VERSION = "2022-11-28"
-        const val MANIFEST_FILE = "latest.json"
+        /**
+         * Raw file hosting sits behind a CDN that can serve the previous copy for a few
+         * minutes, so a release can take that long to become visible to the phone.
+         */
+        const val MANIFEST_URL = "https://raw.githubusercontent.com/$REPO/main/latest.json"
+
         const val APK_NAME = "onthefly.apk"
     }
 }
-
-class MissingUpdateTokenException :
-    IOException("No GitHub token set, so updates cannot be checked.")

@@ -70,6 +70,7 @@ private fun OnTheFlyNavHost() {
                 onCheckUpdates = { navController.navigate(Routes.UPDATE) },
                 onSignOut = {
                     ServiceLocator.apiKeyStore.clear()
+                    ServiceLocator.repository.clearCache()
                     navController.navigate(Routes.API_KEY) {
                         popUpTo(Routes.AGENTS) { inclusive = true }
                     }

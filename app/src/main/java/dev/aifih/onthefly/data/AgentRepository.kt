@@ -80,6 +80,15 @@ class AgentRepository(
         api.cancelRun(agentId, runId)
     }
 
+    /**
+     * Everything cached here is derived from one account, so it has to go when the key does.
+     * Otherwise the next person to sign in on this device sees the previous account's
+     * repositories until they refresh.
+     */
+    fun clearCache() {
+        prefs.edit().clear().apply()
+    }
+
     private fun <T> decode(
         key: String,
         serializer: kotlinx.serialization.KSerializer<List<T>>,

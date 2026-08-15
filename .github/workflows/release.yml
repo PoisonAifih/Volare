@@ -20,29 +20,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Runs before the build so a token problem costs seconds instead of a full build. The
-      # publish step would otherwise fail with a bare 404, which GitHub returns instead of 403
-      # so that it does not reveal whether a private repo exists.
+      # Runs before the build so a token problem costs seconds instead of a full build.
+      # Publishing still needs write access even though the repo is public.
       - name: Verify releases token
         env:
           GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
         run: |
           if [ -z "$GH_TOKEN" ]; then
-            echo "::error::Secret RELEASES_TOKEN belum diatur."
+            echo "::error::Secret RELEASES_TOKEN is not set."
             exit 1
           fi
 
           if ! gh api "repos/$RELEASES_REPO" --jq .full_name > /dev/null 2>&1; then
-            echo "::error::RELEASES_TOKEN tidak bisa melihat $RELEASES_REPO. Pada fine-grained token, pastikan repo itu ada di Repository access dan izin Contents-nya Read and write."
+            echo "::error::RELEASES_TOKEN cannot see $RELEASES_REPO. On a fine-grained token, make sure that repo is listed under Repository access with Contents set to Read and write."
             exit 1
           fi
 
           if [ "$(gh api "repos/$RELEASES_REPO" --jq .permissions.push)" != "true" ]; then
-            echo "::error::RELEASES_TOKEN hanya punya akses baca ke $RELEASES_REPO. Naikkan izin Contents menjadi Read and write."
+            echo "::error::RELEASES_TOKEN only has read access to $RELEASES_REPO. Raise the Contents permission to Read and write."
             exit 1
           fi
 
-          echo "Token oke untuk $RELEASES_REPO"
+          echo "Token is good for $RELEASES_REPO"
 
       - uses: actions/setup-java@v4
         with:
@@ -63,7 +62,7 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
           if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "::error::Secret KEYSTORE_BASE64 belum diatur. Update tidak akan bisa dipasang di atas versi lama tanpa kunci yang sama."
+            echo "::error::Secret KEYSTORE_BASE64 is not set. Without the same key, the update cannot install over an older version."
             exit 1
           fi
           echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
@@ -79,7 +78,7 @@ jobs:
           # required property" instead of naming the secret that is absent.
           for name in ONTHEFLY_KEYSTORE_PASSWORD ONTHEFLY_KEY_ALIAS ONTHEFLY_KEY_PASSWORD; do
             if [ -z "${!name}" ]; then
-              echo "::error::Secret $name belum diatur."
+              echo "::error::Secret $name is not set."
               exit 1
             fi
           done
@@ -109,14 +108,16 @@ jobs:
             --title "OnTheFly ${{ steps.version.outputs.name }}" \
             --notes "$NOTES"
 
-          # The repo is private, so the phone downloads through the REST API and needs the
-          # asset id. Resolve it here to keep the app down to two requests.
+          # Transitional. Builds up to the public-repo switch download by asset id and refuse
+          # a manifest without one, so dropping this now would strand them on an APK they
+          # cannot fetch. Delete this step and the assetId line below once every phone in use
+          # has taken an update published after the switch.
           asset_id=$(gh api \
             "repos/$RELEASES_REPO/releases/tags/${{ steps.version.outputs.tag }}" \
             --jq ".assets[] | select(.name == \"${{ steps.apk.outputs.name }}\") | .id")
 
           if [ -z "$asset_id" ]; then
-            echo "::error::Asset id tidak ditemukan untuk ${{ steps.apk.outputs.name }}"
+            echo "::error::No asset id found for ${{ steps.apk.outputs.name }}"
             exit 1
           fi
 
@@ -129,6 +130,8 @@ jobs:
           git clone "https://x-access-token:$GH_TOKEN@github.com/$RELEASES_REPO.git" releases-repo
           cd releases-repo
 
+          # apkUrl is what the app downloads. The repo is public, so it needs no credentials.
+          # assetId is only here for pre-switch builds; see the publish step.
           cat > latest.json <<JSON
           {
             "versionCode": ${{ steps.version.outputs.code }},
