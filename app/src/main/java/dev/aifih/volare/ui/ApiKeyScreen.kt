@@ -1,4 +1,4 @@
-package dev.aifih.onthefly.ui
+package dev.aifih.volare.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -30,8 +31,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import dev.aifih.onthefly.ServiceLocator
-import dev.aifih.onthefly.data.CursorApiException
+import dev.aifih.volare.ServiceLocator
+import dev.aifih.volare.data.CursorApiException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -105,11 +106,12 @@ fun ApiKeyScreen(onConnected: () -> Unit) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .safeDrawingPadding()
                 .verticalScroll(rememberScrollState())
                 .padding(24.dp),
             verticalArrangement = Arrangement.Center,
         ) {
-            Text(text = "OnTheFly", style = MaterialTheme.typography.headlineMedium)
+            Text(text = "Volare", style = MaterialTheme.typography.headlineMedium)
 
             Spacer(Modifier.height(8.dp))
 

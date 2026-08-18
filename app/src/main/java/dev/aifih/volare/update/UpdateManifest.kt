@@ -1,4 +1,4 @@
-package dev.aifih.onthefly.update
+package dev.aifih.volare.update
 
 import kotlinx.serialization.Serializable
 
@@ -21,7 +21,6 @@ sealed interface UpdateCheck {
 sealed interface InstallEvent {
     data object Success : InstallEvent
 
-    /** The system decided a confirmation dialog is needed after all. */
     data object PendingUserAction : InstallEvent
 
     data class Failed(val message: String) : InstallEvent

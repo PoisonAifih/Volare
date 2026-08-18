@@ -1,11 +1,11 @@
-package dev.aifih.onthefly
+package dev.aifih.volare
 
 import android.content.Context
 import android.content.SharedPreferences
-import dev.aifih.onthefly.data.AgentRepository
-import dev.aifih.onthefly.data.ApiKeyStore
-import dev.aifih.onthefly.data.CursorApi
-import dev.aifih.onthefly.data.RunStream
+import dev.aifih.volare.data.AgentRepository
+import dev.aifih.volare.data.ApiKeyStore
+import dev.aifih.volare.data.CursorApi
+import dev.aifih.volare.data.RunStream
 import java.util.concurrent.TimeUnit
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
@@ -22,7 +22,7 @@ object ServiceLocator {
     lateinit var runStream: RunStream
         private set
 
-    /** Shared with [dev.aifih.onthefly.update.AppUpdater], which is built per ViewModel. */
+    /** Shared with [dev.aifih.volare.update.AppUpdater], which is built per ViewModel. */
     lateinit var httpClient: OkHttpClient
         private set
 
@@ -39,7 +39,7 @@ object ServiceLocator {
 
         apiKeyStore = ApiKeyStore(context)
 
-        prefs = context.getSharedPreferences("onthefly_cache", Context.MODE_PRIVATE)
+        prefs = context.getSharedPreferences("volare_cache", Context.MODE_PRIVATE)
 
         // Shared by the API client and the updater. The long read timeout is needed because
         // GET /v1/repositories can legitimately take tens of seconds.

@@ -1,142 +1,151 @@
 # AGENTS.md
 
-## Tentang project ini
+## About this project
 
-OnTheFly adalah aplikasi Android (Kotlin + Jetpack Compose) untuk menjalankan dan
-memantau Cursor Cloud Agents dari HP. Aplikasi ini adalah client dari Cloud Agents API v1
-di `https://api.cursor.com`.
+Volare is an Android app (Kotlin + Jetpack Compose) for running and monitoring Cursor Cloud
+Agents from a phone. It is a client of the Cloud Agents API v1 at `https://api.cursor.com`.
 
-Aplikasi ini bukan editor kode. Lingkupnya: memulai agent, memantau run secara live,
-mengirim follow-up, membatalkan run, dan membuka PR hasilnya di browser.
+It is not a code editor. Its scope is: starting agents, watching runs live, sending
+follow-ups, cancelling runs, and opening the resulting PR in a browser.
 
-## Perintah
+## Commands
 
-- `./gradlew :app:assembleDebug` membangun APK debug.
-- `./gradlew :app:testDebugUnitTest` menjalankan unit test JVM.
-- `./gradlew :app:lintDebug` menjalankan Android Lint.
+- `./gradlew :app:assembleDebug` builds the debug APK.
+- `./gradlew :app:testDebugUnitTest` runs the JVM unit tests.
+- `./gradlew :app:lintDebug` runs Android Lint.
 
-Butuh JDK 17 dan Android SDK. Di macOS dengan Android Studio, JDK-nya ada di
+Requires JDK 17 and the Android SDK. On macOS with Android Studio, the JDK lives at
 `/Applications/Android Studio.app/Contents/jbr/Contents/Home`.
 
-## Batasan versi yang tidak boleh dilanggar
+## Version constraints that must not be broken
 
-Ini bagian paling mudah merusak build. Dependensi dikunci ke himpunan terakhir yang masih
-bisa dibangun dengan `compileSdk 36` dan AGP 8.13.1:
+This is the easiest way to break the build. Dependencies are pinned to the newest set that
+still builds with `compileSdk 36` and AGP 8.13.1:
 
-- Rilis androidx yang lebih baru (`core-ktx` 1.19+, `lifecycle` 2.11+, Compose `ui` 1.12+)
-  menuntut `compileSdk 37` dan AGP 9.1+.
-- Naik ke sana berarti mengganti AGP, Gradle, dan platform SDK sekaligus. Jangan lakukan
-  sebagian saja.
-- `androidx.compose.material3` tidak lagi membawa ikon secara transitif, jadi
-  `material-icons-core` disertakan eksplisit. Versinya dibekukan di 1.7.8 oleh BOM, dan
-  hanya ikon dari set *core* yang tersedia — jangan pakai ikon yang cuma ada di
+- Newer androidx releases (`core-ktx` 1.19+, `lifecycle` 2.11+, Compose `ui` 1.12+) require
+  `compileSdk 37` and AGP 9.1+.
+- Moving there means replacing AGP, Gradle, and the SDK platform together. Do not do it
+  halfway.
+- `androidx.compose.material3` no longer pulls in icons transitively, so
+  `material-icons-core` is declared explicitly. The BOM freezes it at 1.7.8, and only icons
+  from the *core* set exist — do not use an icon that only ships in
   `material-icons-extended`.
 
-Kalau perlu menaikkan versi, ubah `gradle/libs.versions.toml` saja, jangan menulis versi
-langsung di `app/build.gradle.kts`.
+To bump a version, edit `gradle/libs.versions.toml` only; never write versions directly in
+`app/build.gradle.kts`.
 
-## Konvensi
+## Conventions
 
-- Kotlin, Jetpack Compose, Material 3. Tidak ada layout XML untuk UI.
-- Dependency injection manual lewat `ServiceLocator`. Jangan menambahkan Hilt atau Koin.
-- Jaringan memakai OkHttp langsung plus kotlinx.serialization. **Jangan menambahkan
-  Retrofit** — hanya ada sekitar sepuluh endpoint dan OkHttp sudah dibutuhkan untuk SSE.
-- Semua DTO memakai `ignoreUnknownKeys` dan properti opsional bernilai default. API-nya
-  masih public beta, jadi field baru tidak boleh membuat parsing gagal.
-- Status run yang tidak dikenal **tidak** dianggap terminal. Lihat `RunStatus.isTerminal`.
-- Teks yang dilihat pengguna ditulis dalam bahasa Inggris, sama seperti identifier, pesan
- error internal, dan nama file.
+- Kotlin, Jetpack Compose, Material 3. No XML layouts for UI.
+- Manual dependency injection through `ServiceLocator`. Do not add Hilt or Koin.
+- Networking is OkHttp directly plus kotlinx.serialization. **Do not add Retrofit** — there
+  are only about ten endpoints, and OkHttp is already required for SSE.
+- Every DTO uses `ignoreUnknownKeys` and optional properties with defaults. The API is still
+  public beta, so a new field must never break parsing.
+- An unrecognised run status is **not** treated as terminal. See `RunStatus.isTerminal`.
+- User-visible text is written in English, as are identifiers, internal error messages, and
+  file names.
+- Window insets are handled in Compose, not by the system. `MainActivity` calls
+  `enableEdgeToEdge()`, so any bar pinned to the bottom needs `navigationBarsPadding()` then
+  `imePadding()`, and a screen without a `Scaffold` needs `safeDrawingPadding()`.
 
-## Yang tidak boleh dilakukan
+## Things you must not do
 
-- Jangan pernah mencatat API key ke log, menaruhnya di `Intent` extra, atau menuliskannya ke
- berkas biasa. Key itu hanya lewat `SecretStore`, yang mengenkripsinya dengan kunci AES-GCM
- di Android Keystore. Tiap rahasia punya alias sendiri, supaya mencabut satu tidak membuat
- yang lain tidak terbaca.
-- Jangan menyimpan apa pun yang berasal dari satu akun di luar `onthefly_cache`. Sign out
- memanggil `AgentRepository.clearCache()`, yang mengosongkan seluruh berkas itu, supaya
- akun berikutnya di HP yang sama tidak melihat daftar repo akun sebelumnya.
-- Jangan memakai Jetpack Security (`EncryptedSharedPreferences`). Library itu deprecated
-  dan sudah sengaja dilepas.
-- Jangan memanggil `GET /v1/repositories` di luar `AgentRepository`. Endpoint itu dibatasi
-  1 permintaan per menit dan 30 per jam, dan bisa perlu puluhan detik. Selalu sajikan dari
-  cache lebih dulu.
-- Jangan menghapus penanganan `Last-Event-ID` di `RunStream`. Itu yang membuat transkrip
-  tidak hilang saat HP berpindah antara Wi-Fi dan data seluler.
-- Jangan mengubah `applicationId` atau cara release ditandatangani. Kedua hal itu memutus
-  jalur update di HP yang sudah memasang aplikasi, dan satu-satunya pemulihannya adalah
-  uninstall manual.
-- Jangan menulis `versionCode` sebagai angka tetap. Nilainya datang dari
-  `ONTHEFLY_VERSION_CODE`, yang diisi CI dengan nomor run.
+- Never log the API key, put it in an `Intent` extra, or write it to an ordinary file. It
+  travels only through `SecretStore`, which encrypts it with an AES-GCM key in the Android
+  Keystore. Each secret has its own alias, so revoking one does not make the others
+  unreadable.
+- Do not rename `applicationId`, the Kotlin packages, the `SecretStore` file name, or the
+  Keystore aliases. The application id decides whether an update installs over the existing
+  app, and the file name and aliases decide whether the stored API key can still be read.
+  Renaming any of them costs every phone a manual uninstall and a re-entered API key.
+- Do not store anything derived from one account outside `volare_cache`. Signing out calls
+  `AgentRepository.clearCache()`, which empties that whole file so the next account on the
+  same phone does not see the previous one's repository list.
+- Do not use Jetpack Security (`EncryptedSharedPreferences`). It is deprecated and was
+  dropped deliberately.
+- Do not call `GET /v1/repositories` outside `AgentRepository`. That endpoint is limited to
+  1 request per minute and 30 per hour, and can take tens of seconds. Always serve from cache
+  first.
+- Do not remove the `Last-Event-ID` handling in `RunStream`. It is what keeps the transcript
+  intact when the phone moves between Wi-Fi and mobile data.
+- Do not change how releases are signed. A different key breaks the update path on every
+  phone that already has the app, and the only recovery is a manual uninstall.
+- Do not hardcode `versionCode`. It comes from `VOLARE_VERSION_CODE`, which CI fills with the
+  run number.
+- Gradle reads `VOLARE_*` environment variables, but the GitHub secrets holding the signing
+  credentials are still named `ONTHEFLY_*`. The "Build signed release APK" step maps one onto
+  the other. That mismatch is deliberate: the secrets live in GitHub settings, so renaming the
+  `secrets.*` references here would make them resolve to empty strings and fail the build.
 
-## Catatan API yang mudah terlewat
+## API details that are easy to miss
 
-- Satu agent hanya boleh punya satu run aktif. `POST /runs` saat run lain berjalan
-  mengembalikan `409 agent_busy` — tangani sebagai kondisi normal, bukan crash.
-- `GET /v1/agents` hanya mengembalikan field identitas. `repos` dan `autoCreatePR` baru ada
-  di `GET /v1/agents/{id}`.
-- `Run.git` bersifat per-agent, bukan per-run. Semua run di agent yang sama mengembalikan
-  snapshot git yang sama.
-- Stream bisa mengembalikan `410 stream_expired` setelah retention window lewat. Itu bukan
-  error yang bisa diulang; baca status akhir lewat `GET run`.
-- Webhook untuk API v1 belum ada. Karena itu notifikasi dikerjakan oleh
-  `RunWatchService`, sebuah foreground service yang menjaga koneksi SSE saat layar detail
-  ditutup. Kalau webhook sudah rilis, service ini bisa diganti FCM.
+- An agent may only have one active run. `POST /runs` while another run is going returns
+  `409 agent_busy` — treat it as a normal condition, not a crash.
+- `GET /v1/agents` returns identity fields only. `repos` and `autoCreatePR` appear only in
+  `GET /v1/agents/{id}`.
+- `Run.git` is per-agent, not per-run. Every run on the same agent returns the same git
+  snapshot.
+- The stream can return `410 stream_expired` once the retention window passes. That is not a
+  retryable error; read the final status with `GET run`.
+- The stream is best effort in general: it can also end on an error event or simply close.
+  `AgentDetailViewModel.settle` reconciles against `GET run` whenever that happens, so a
+  finished run never shows up as an error. Keep that fallback.
+- There are no webhooks for API v1 yet. Notifications are therefore handled by
+  `RunWatchService`, a foreground service that holds the SSE connection open when the detail
+  screen closes. Once webhooks ship, it can be replaced with FCM.
 
-## Alur release dan update mandiri
+## Release and self-update flow
 
-Setiap push ke `main` menjalankan `.github/workflows/release.yml`: APK ditandatangani
-dengan keystore dari secret, lalu diterbitkan ke repo publik `PoisonAifih/OnTheFly-ApkRelease`
-bersama `latest.json`. Di HP, menu **Check for updates** membaca `latest.json`, membandingkan
-`versionCode`, mengunduh APK, dan memasangnya lewat `PackageInstaller`.
+Every push to `main` runs `.github/workflows/release.yml`: the APK is signed with a keystore
+from secrets, then published to the public repository `PoisonAifih/Volare-ApkRelease`
+alongside `latest.json`. On the phone, **Check for updates** reads `latest.json`, compares
+`versionCode`, downloads the APK, and installs it through `PackageInstaller`.
 
-Repo release bersifat publik, jadi kedua permintaan itu anonim dan tidak ada token sama
-sekali di jalur update:
+The release repository is public, so both requests are anonymous and no token appears
+anywhere in the update path:
 
-- `latest.json` dibaca dari `https://raw.githubusercontent.com/{repo}/main/latest.json`.
- Host itu di belakang CDN yang bisa menyajikan salinan lama beberapa menit, jadi rilis baru
- bisa telat terlihat. Itu wajar; jangan menggantinya dengan REST API GitHub, karena
- permintaan anonim ke sana dibatasi 60 per jam per IP.
-- APK diunduh langsung dari `apkUrl` di `latest.json`. Redirect ke penyimpanan
- ber-signature diikuti OkHttp seperti biasa, aman karena tidak ada header autentikasi yang
- bisa ikut terbawa.
-- Yang menjaga jalur ini tetap aman bukan kerahasiaan repo, melainkan tanda tangan APK.
- Paket dengan kunci lain akan ditolak sistem saat dipasang di atas versi yang ada.
-- CI masih menulis `assetId` ke `latest.json` walau aplikasi tidak lagi membacanya. Build
- lama menolak manifest tanpa field itu, jadi menghapusnya sekarang membuat HP yang belum
- update tidak bisa mengunduh APK penggantinya. Hapus setelah semua HP sudah lewat rilis
- pertama pasca-switch.
+- `latest.json` is read from `https://raw.githubusercontent.com/{repo}/main/latest.json`.
+  That host sits behind a CDN that can serve a stale copy for a few minutes, so a new release
+  can take that long to appear. That is expected; do not switch back to the GitHub REST API,
+  where anonymous requests are limited to 60 per hour per IP.
+- The APK is downloaded straight from `apkUrl` in `latest.json`. OkHttp follows the redirect
+  to signed storage normally, which is safe because no auth header exists to leak.
+- What keeps this path safe is the APK signature, not the repository being private. A package
+  signed with a different key is rejected by the system when installed over the existing one.
+- CI still writes `assetId` into `latest.json` even though the app ignores it. It exists only
+  for builds published before the repository became public, and the application id has changed
+  since, so those builds cannot install this package at all. Both the lookup step and the
+  `assetId` line are safe to delete.
+- Installation runs without a dialog because the app installs itself, holds
+  `UPDATE_PACKAGES_WITHOUT_USER_ACTION`, and uses `USER_ACTION_NOT_REQUIRED`. The system may
+  still ask for confirmation, so `InstallResultReceiver` must keep handling
+  `STATUS_PENDING_USER_ACTION` and forwarding `Intent.EXTRA_INTENT`.
+- The `PendingIntent` for session status **must** be `FLAG_MUTABLE`. Without it the system
+  cannot attach the status extras and the install result never arrives.
+- Inside the `signingConfigs` block, do not name a local variable `keyAlias` or
+  `keyPassword`. Those names resolve to `SigningConfig` properties, so the values come out
+  null and the build fails with "missing required property".
+- The `latest.json` URL is a constant in `AppUpdater`. If the release repository is renamed,
+  change it there and in `RELEASES_REPO` in the workflow.
 
-- Instalasi berjalan tanpa dialog karena aplikasi memasang dirinya sendiri, memegang
-  `UPDATE_PACKAGES_WITHOUT_USER_ACTION`, dan memakai `USER_ACTION_NOT_REQUIRED`. Sistem
-  masih boleh meminta konfirmasi, jadi `InstallResultReceiver` wajib tetap menangani
-  `STATUS_PENDING_USER_ACTION` dan meneruskan `Intent.EXTRA_INTENT`.
-- `PendingIntent` untuk status sesi **harus** `FLAG_MUTABLE`. Tanpa itu sistem tidak bisa
-  menyisipkan extra status dan hasil instalasi tidak pernah sampai.
-- Di dalam blok `signingConfigs`, jangan menamai variabel lokal `keyAlias` atau
-  `keyPassword`. Nama itu diselesaikan ke properti `SigningConfig` sehingga nilainya jadi
-  null dan build gagal dengan pesan "missing required property".
-- URL `latest.json` ada sebagai konstanta di `AppUpdater`. Kalau repo release diganti nama,
-  ubah di situ dan di `RELEASES_REPO` pada workflow.
+## Definition of done
 
-## Definisi selesai
+`./gradlew :app:testDebugUnitTest :app:assembleDebug` must pass before you report that you
+are finished.
 
-`./gradlew :app:testDebugUnitTest :app:assembleDebug` harus lulus sebelum kamu melapor
-selesai.
+## Cursor Cloud specific instructions
 
-## Instruksi khusus Cursor Cloud
+This section applies when you run as a Cloud Agent, usually triggered from a phone with a
+short prompt and little context.
 
-Bagian ini berlaku saat kamu berjalan sebagai Cloud Agent, biasanya dipicu dari HP dengan
-prompt singkat dan tanpa banyak konteks.
-
-- `.cursor/install.sh` sudah menyiapkan Android SDK dan menjalankan build. Kalau
-  `sdkmanager` tidak ada, jalankan script itu lebih dulu.
-- Jalankan build dan test sendiri sebelum melapor. Reviewer ada di layar kecil dan tidak
-  bisa dengan cepat menjalankannya manual.
-- Tetap di branch `cursor/...` milikmu. Jangan pernah push langsung ke `main`.
-- Buat perubahan yang kecil dan fokus. Diff panjang tidak bisa direview dengan layak dari
-  HP.
-- Tulis deskripsi PR yang bisa dinilai tanpa membuka editor: apa yang berubah, mengapa, dan
-  bukti build serta test lulus.
-- Kalau promptnya ambigu, pilih interpretasi paling sederhana, kerjakan, lalu sebutkan
-  asumsimu di deskripsi PR.
+- `.cursor/install.sh` already sets up the Android SDK and runs the build. If `sdkmanager` is
+  missing, run that script first.
+- Run the build and tests yourself before reporting. The reviewer is on a small screen and
+  cannot quickly run them by hand.
+- Stay on your own `cursor/...` branch. Never push directly to `main`.
+- Make small, focused changes. A long diff cannot be reviewed properly from a phone.
+- Write a PR description that can be judged without opening an editor: what changed, why, and
+  evidence that the build and tests pass.
+- If the prompt is ambiguous, take the simplest interpretation, do the work, then state your
+  assumptions in the PR description.

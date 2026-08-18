@@ -1,4 +1,4 @@
-package dev.aifih.onthefly.service
+package dev.aifih.volare.service
 
 import android.app.Notification
 import android.app.NotificationManager
@@ -10,12 +10,12 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.getSystemService
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
-import dev.aifih.onthefly.OnTheFlyApplication
-import dev.aifih.onthefly.R
-import dev.aifih.onthefly.ServiceLocator
-import dev.aifih.onthefly.data.RunEvent
-import dev.aifih.onthefly.data.RunStatus
-import dev.aifih.onthefly.ui.MainActivity
+import dev.aifih.volare.R
+import dev.aifih.volare.ServiceLocator
+import dev.aifih.volare.VolareApplication
+import dev.aifih.volare.data.RunEvent
+import dev.aifih.volare.data.RunStatus
+import dev.aifih.volare.ui.MainActivity
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 
@@ -95,7 +95,7 @@ class RunWatchService : LifecycleService() {
     }
 
     private fun ongoingNotification(agentName: String): Notification =
-        NotificationCompat.Builder(this, OnTheFlyApplication.CHANNEL_RUN_WATCH)
+        NotificationCompat.Builder(this, VolareApplication.CHANNEL_RUN_WATCH)
             .setSmallIcon(R.drawable.ic_stat_agent)
             .setContentTitle("Watching agent")
             .setContentText(agentName)
@@ -121,7 +121,7 @@ class RunWatchService : LifecycleService() {
 
         val body = text?.take(400)?.ifBlank { null } ?: agentName
 
-        val notification = NotificationCompat.Builder(this, OnTheFlyApplication.CHANNEL_RUN_FINISHED)
+        val notification = NotificationCompat.Builder(this, VolareApplication.CHANNEL_RUN_FINISHED)
             .setSmallIcon(R.drawable.ic_stat_agent)
             .setContentTitle("$title · $agentName")
             .setContentText(body)

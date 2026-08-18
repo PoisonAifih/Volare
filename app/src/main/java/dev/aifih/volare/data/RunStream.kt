@@ -1,4 +1,4 @@
-package dev.aifih.onthefly.data
+package dev.aifih.volare.data
 
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CompletableDeferred

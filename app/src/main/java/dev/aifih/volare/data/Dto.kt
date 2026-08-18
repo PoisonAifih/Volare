@@ -1,4 +1,4 @@
-package dev.aifih.onthefly.data
+package dev.aifih.volare.data
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

@@ -1,4 +1,4 @@
-package dev.aifih.onthefly.ui
+package dev.aifih.volare.ui
 
 import android.app.Application
 import android.content.Intent
@@ -33,12 +33,12 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import dev.aifih.onthefly.ServiceLocator
-import dev.aifih.onthefly.update.AppUpdater
-import dev.aifih.onthefly.update.InstallEvent
-import dev.aifih.onthefly.update.InstallResultReceiver
-import dev.aifih.onthefly.update.UpdateCheck
-import dev.aifih.onthefly.update.UpdateManifest
+import dev.aifih.volare.ServiceLocator
+import dev.aifih.volare.update.AppUpdater
+import dev.aifih.volare.update.InstallEvent
+import dev.aifih.volare.update.InstallResultReceiver
+import dev.aifih.volare.update.UpdateCheck
+import dev.aifih.volare.update.UpdateManifest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

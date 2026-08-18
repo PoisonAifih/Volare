@@ -1,4 +1,4 @@
-package dev.aifih.onthefly.update
+package dev.aifih.volare.update
 
 import android.content.BroadcastReceiver
 import android.content.Context

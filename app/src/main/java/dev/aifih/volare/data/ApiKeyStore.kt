@@ -1,4 +1,4 @@
-package dev.aifih.onthefly.data
+package dev.aifih.volare.data
 
 import android.content.Context
 
@@ -11,7 +11,7 @@ class ApiKeyStore(context: Context) {
     private val secret = SecretStore(
         context = context,
         prefKey = "cursor_api_key",
-        keyAlias = "onthefly_api_key",
+        keyAlias = "volare_api_key",
     )
 
     fun get(): String? = secret.get()

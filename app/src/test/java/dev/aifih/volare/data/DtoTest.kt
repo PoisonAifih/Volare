@@ -1,4 +1,4 @@
-package dev.aifih.onthefly.data
+package dev.aifih.volare.data
 
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
@@ -85,12 +85,12 @@ class DtoTest {
     @Test
     fun `repository url renders as owner slash name`() {
         assertEquals(
-            "PoisonAifih/OnTheFly",
-            RepositoryItem("https://github.com/PoisonAifih/OnTheFly").shortName,
+            "PoisonAifih/Volare",
+            RepositoryItem("https://github.com/PoisonAifih/Volare").shortName,
         )
         assertEquals(
-            "PoisonAifih/OnTheFly",
-            RepositoryItem("https://github.com/PoisonAifih/OnTheFly.git").shortName,
+            "PoisonAifih/Volare",
+            RepositoryItem("https://github.com/PoisonAifih/Volare.git").shortName,
         )
     }
 

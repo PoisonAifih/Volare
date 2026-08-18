@@ -1,4 +1,4 @@
-package dev.aifih.onthefly.data
+package dev.aifih.volare.data
 
 import android.content.SharedPreferences
 import kotlinx.serialization.builtins.ListSerializer

@@ -1,4 +1,4 @@
-package dev.aifih.onthefly.ui
+package dev.aifih.volare.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -46,8 +46,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import dev.aifih.onthefly.ServiceLocator
-import dev.aifih.onthefly.data.Agent
+import dev.aifih.volare.ServiceLocator
+import dev.aifih.volare.data.Agent
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
