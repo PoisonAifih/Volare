@@ -98,7 +98,6 @@ jobs:
           echo "path=$RUNNER_TEMP/$name" >> "$GITHUB_OUTPUT"
 
       - name: Publish release to the releases repo
-        id: publish
         env:
           GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
           # Passed through the environment so quotes or newlines in a commit message
@@ -111,21 +110,6 @@ jobs:
             --title "Volare ${{ steps.version.outputs.name }}" \
             --notes "$NOTES"
 
-          # Transitional. Builds up to the public-repo switch download by asset id and refuse
-          # a manifest without one, so dropping this now would strand them on an APK they
-          # cannot fetch. Delete this step and the assetId line below once every phone in use
-          # has taken an update published after the switch.
-          asset_id=$(gh api \
-            "repos/$RELEASES_REPO/releases/tags/${{ steps.version.outputs.tag }}" \
-            --jq ".assets[] | select(.name == \"${{ steps.apk.outputs.name }}\") | .id")
-
-          if [ -z "$asset_id" ]; then
-            echo "::error::No asset id found for ${{ steps.apk.outputs.name }}"
-            exit 1
-          fi
-
-          echo "asset_id=$asset_id" >> "$GITHUB_OUTPUT"
-
       - name: Point latest.json at the new build
         env:
           GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
@@ -134,12 +118,10 @@ jobs:
           cd releases-repo
 
           # apkUrl is what the app downloads. The repo is public, so it needs no credentials.
-          # assetId is only here for pre-switch builds; see the publish step.
           cat > latest.json <<JSON
           {
             "versionCode": ${{ steps.version.outputs.code }},
             "versionName": "${{ steps.version.outputs.name }}",
-            "assetId": ${{ steps.publish.outputs.asset_id }},
             "apkUrl": "https://github.com/$RELEASES_REPO/releases/download/${{ steps.version.outputs.tag }}/${{ steps.apk.outputs.name }}",
             "publishedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           }

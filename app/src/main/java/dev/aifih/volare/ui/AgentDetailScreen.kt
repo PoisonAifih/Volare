@@ -262,11 +262,6 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
         }
     }
 
-    fun stopStreaming() {
-        streamJob?.cancel()
-        streamJob = null
-    }
-
     private companion object {
         const val MAX_TOOL_LINES = 6
     }
