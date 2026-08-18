@@ -113,10 +113,6 @@ anywhere in the update path:
   to signed storage normally, which is safe because no auth header exists to leak.
 - What keeps this path safe is the APK signature, not the repository being private. A package
   signed with a different key is rejected by the system when installed over the existing one.
-- CI still writes `assetId` into `latest.json` even though the app ignores it. It exists only
-  for builds published before the repository became public, and the application id has changed
-  since, so those builds cannot install this package at all. Both the lookup step and the
-  `assetId` line are safe to delete.
 - Installation runs without a dialog because the app installs itself, holds
   `UPDATE_PACKAGES_WITHOUT_USER_ACTION`, and uses `USER_ACTION_NOT_REQUIRED`. The system may
   still ask for confirmation, so `InstallResultReceiver` must keep handling
