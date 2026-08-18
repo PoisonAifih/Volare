@@ -1,4 +1,4 @@
-package dev.aifih.onthefly.ui
+package dev.aifih.volare.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -41,14 +42,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import dev.aifih.onthefly.ServiceLocator
-import dev.aifih.onthefly.data.CreateAgentRequest
-import dev.aifih.onthefly.data.ModelInfo
-import dev.aifih.onthefly.data.ModelSelection
-import dev.aifih.onthefly.data.Prompt
-import dev.aifih.onthefly.data.RefreshTooSoonException
-import dev.aifih.onthefly.data.RepoRef
-import dev.aifih.onthefly.data.RepositoryItem
+import dev.aifih.volare.ServiceLocator
+import dev.aifih.volare.data.CreateAgentRequest
+import dev.aifih.volare.data.ModelInfo
+import dev.aifih.volare.data.ModelSelection
+import dev.aifih.volare.data.Prompt
+import dev.aifih.volare.data.RefreshTooSoonException
+import dev.aifih.volare.data.RepoRef
+import dev.aifih.volare.data.RepositoryItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -222,6 +223,7 @@ fun NewAgentScreen(onBack: () -> Unit, onCreated: (String) -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
         ) {

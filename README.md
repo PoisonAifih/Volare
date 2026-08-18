@@ -1,111 +1,106 @@
-# OnTheFly
+# Volare
 
-Aplikasi Android untuk menjalankan dan memantau [Cursor Cloud Agents](https://cursor.com/docs/cloud-agent)
-dari HP. Dibuat karena Cursor belum punya aplikasi Android native — jalur resmi di Android
-hanyalah PWA `cursor.com/agents`, yang notifikasi background-nya tidak andal.
+An Android app for running and monitoring [Cursor Cloud Agents](https://cursor.com/docs/cloud-agent)
+from a phone. It exists because Cursor has no native Android app — the official route on
+Android is the `cursor.com/agents` PWA, whose background notifications are unreliable.
 
-Ini client tipis di atas [Cloud Agents API v1](https://cursor.com/docs/cloud-agent/api/endpoints),
-bukan editor kode.
+This is a thin client over the [Cloud Agents API v1](https://cursor.com/docs/cloud-agent/api/endpoints),
+not a code editor.
 
-## Yang bisa dilakukan
+## What it does
 
-- Menyimpan API key Cursor, terenkripsi dengan kunci AES-GCM di Android Keystore.
-- Memulai agent: pilih repo, branch awal, model, mode `agent` atau `plan`, dan apakah PR
-  dibuat otomatis.
-- Memantau run secara live lewat Server-Sent Events, termasuk aktivitas tool call.
-- Mengirim follow-up ke agent yang sedang berjalan, dan membatalkan run.
-- Membuka pull request hasilnya di browser.
-- Notifikasi saat run berakhir, bahkan setelah kamu menutup layar detail.
-- Memperbarui dirinya sendiri dari HP lewat menu **Cek update**, tanpa kabel dan tanpa
-  Android Studio.
+- Stores your Cursor API key, encrypted with an AES-GCM key in the Android Keystore.
+- Starts agents: pick the repository, starting branch, model, `agent` or `plan` mode, and
+  whether a PR is created automatically.
+- Follows runs live over Server-Sent Events, including tool call activity.
+- Sends follow-ups to a running agent, and cancels runs.
+- Opens the resulting pull request in a browser.
+- Notifies you when a run ends, even after you close the detail screen.
+- Updates itself from the phone through **Check for updates**, with no cable and no Android
+  Studio.
 
-## Yang belum ada
+## What it does not do
 
-- Tidak ada review diff di dalam app. Diff dan merge dilakukan di GitHub lewat tautan PR.
-- Tidak ada lampiran gambar, meski API-nya mendukung `prompt.images`.
-- Tidak ada push notification sungguhan. Cloud Agents API v1 belum punya webhook, jadi
-  notifikasi ditopang foreground service yang menjaga koneksi SSE. Konsekuensinya, Android
-  bisa menghentikan pemantauan kalau sistem sedang agresif menghemat baterai.
+- No diff review in the app. Diffs and merges happen on GitHub through the PR link.
+- No image attachments, even though the API supports `prompt.images`.
+- No real push notifications. Cloud Agents API v1 has no webhooks, so notifications rely on a
+  foreground service holding the SSE connection open. Android may stop that monitoring when
+  the system is aggressive about saving battery.
 
-## Menjalankan
+## Building
 
-Butuh JDK 17 dan Android SDK dengan platform `android-36`.
+Requires JDK 17 and the Android SDK with platform `android-36`.
 
 ```bash
 ./gradlew :app:assembleDebug
 ./gradlew :app:testDebugUnitTest
 ```
 
-APK debug muncul di `app/build/outputs/apk/debug/`. Pasang ke HP lewat kabel:
+The debug APK lands in `app/build/outputs/apk/debug/`. Install it over a cable:
 
 ```bash
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Di macOS dengan Android Studio, JDK-nya perlu ditunjuk manual kalau `java` tidak ada di
-`PATH`:
+On macOS with Android Studio, point at its JDK if `java` is not on your `PATH`:
 
 ```bash
 export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 ```
 
-## Menyiapkan API key
+## Setting up the API key
 
-1. Buka [Cursor Dashboard → API Keys](https://cursor.com/dashboard/api) dan buat user API key.
-2. Tempel key itu di layar pertama aplikasi. Aplikasi memverifikasinya lewat `GET /v1/me`.
+1. Open [Cursor Dashboard → API Keys](https://cursor.com/dashboard/api) and create a user API key.
+2. Paste it into the app's first screen. The app verifies it with `GET /v1/me`.
 
-Key ini memberi akses penuh ke cloud agent akunmu. Key tidak pernah keluar dari perangkat,
-tapi kalau HP hilang, cabut key-nya dari dashboard.
+The key grants full access to your account's cloud agents. It never leaves the device, but if
+you lose the phone, revoke the key from the dashboard.
 
-Cloud Agents juga mensyaratkan plan berbayar dan source control yang sudah terhubung di
-[dashboard Integrations](https://cursor.com/dashboard/integrations).
+Cloud Agents also require a paid plan and source control connected in the
+[Integrations dashboard](https://cursor.com/dashboard/integrations).
 
-## Update dari HP
+## Updating from the phone
 
-Aplikasi bisa mengganti dirinya sendiri tanpa dialog konfirmasi. Android mengizinkannya
-karena pemasangnya adalah aplikasi itu sendiri; syaratnya izin
-`UPDATE_PACKAGES_WITHOUT_USER_ACTION`, sesi `PackageInstaller` dengan
-`USER_ACTION_NOT_REQUIRED`, dan `targetSdk` yang cukup tinggi.
+The app can replace itself with no confirmation dialog. Android allows this because the
+installer is the app itself; it requires the `UPDATE_PACKAGES_WITHOUT_USER_ACTION` permission,
+a `PackageInstaller` session with `USER_ACTION_NOT_REQUIRED`, and a high enough `targetSdk`.
 
-Alurnya: setiap push ke `main` memicu workflow `release.yml`, yang membangun APK
-bertanda tangan dan menerbitkannya ke repo private `OnTheFly-ApkRelease` beserta
-`latest.json`. Di HP, menu **Cek update** membaca `latest.json`, membandingkan
-`versionCode`, lalu mengunduh dan memasang.
+The flow: every push to `main` triggers the `release.yml` workflow, which builds a signed APK
+and publishes it to the public `Volare-ApkRelease` repository alongside `latest.json`. On
+the phone, **Check for updates** reads `latest.json`, compares `versionCode`, then downloads
+and installs.
 
-Karena repo release private, aplikasi memakai REST API GitHub dengan token read-only yang
-kamu tempel sekali di layar Update. `raw.githubusercontent.com` tidak dipakai karena tidak
-menerima autentikasi token. Unduhan asset dijawab dengan redirect ke penyimpanan
-ber-signature, dan header `Authorization` **tidak boleh** ikut ke sana, jadi redirect-nya
-diikuti manual di `AppUpdater`.
+Because that repository is public, both requests are anonymous. `latest.json` comes from
+`raw.githubusercontent.com` and the APK from the release download URL in the manifest, so no
+token is involved anywhere in the update path.
 
-Empat hal yang perlu diingat:
+Four things to keep in mind:
 
-- **Instalasi pertama tetap manual.** Silent install hanya berlaku untuk update.
-- **Kuncinya tidak boleh berubah.** Update hanya bisa memasang di atas versi lama bila
-  ditandatangani kunci yang sama. Keystore ada di `keystore/` dan tidak masuk git; kalau
-  hilang, HP harus uninstall lalu install ulang dari nol.
-- **Tanda tangan itu pengamannya, bukan privasi repo.** Karena update dipasang tanpa dialog,
-  yang mencegah APK asing terpasang adalah pemeriksaan tanda tangan Android.
-- **Silent tidak dijamin.** Sebagian ROM tetap memunculkan dialog, jadi aplikasi menangani
-  `STATUS_PENDING_USER_ACTION` dan meneruskan dialognya.
+- **The first install is still manual.** Silent install only applies to updates.
+- **The signing key must not change.** An update can only install over an older version if it
+  is signed with the same key. The keystore lives in `keystore/`, which is not in git; if it
+  is lost, phones have to uninstall and start over.
+- **The signature is the safeguard, not repository privacy.** Since updates install without a
+  dialog, what stops a foreign APK is Android's signature check.
+- **Silent is not guaranteed.** Some ROMs still show a dialog, so the app handles
+  `STATUS_PENDING_USER_ACTION` and forwards it.
 
-Setup sekali di GitHub, pada repo ini:
+One-time setup on this repository:
 
-| Secret | Isi |
+| Secret | Contents |
 | --- | --- |
-| `KEYSTORE_BASE64` | isi `keystore/release.jks.base64` |
-| `ONTHEFLY_KEYSTORE_PASSWORD`, `ONTHEFLY_KEY_PASSWORD`, `ONTHEFLY_KEY_ALIAS` | dari `keystore/keystore.properties` |
-| `RELEASES_TOKEN` | PAT dengan izin `Contents: Read and write` di repo `OnTheFly-ApkRelease` |
+| `KEYSTORE_BASE64` | contents of `keystore/release.jks.base64` |
+| `ONTHEFLY_KEYSTORE_PASSWORD`, `ONTHEFLY_KEY_PASSWORD`, `ONTHEFLY_KEY_ALIAS` | from `keystore/keystore.properties` |
+| `RELEASES_TOKEN` | PAT with `Contents: Read and write` on `Volare-ApkRelease` |
 
-Repo `OnTheFly-ApkRelease` perlu sudah punya commit awal. Untuk HP, buat token terpisah yang
-hanya punya `Contents: Read` di repo itu, supaya token yang tersimpan di perangkat tidak
-bisa menulis apa pun.
+`Volare-ApkRelease` needs an initial commit before the first release. The phone needs no
+token of its own.
 
-## Struktur
+## Structure
 
-- `data/` — DTO, klien API OkHttp, streaming SSE, penyimpanan rahasia terenkripsi, dan caching.
-- `ui/` — layar Compose beserta ViewModel-nya.
-- `service/RunWatchService.kt` — foreground service yang menjaga stream saat app di background.
-- `update/` — pembacaan `latest.json` dan pemasangan APK lewat `PackageInstaller`.
+- `data/` — DTOs, the OkHttp API client, SSE streaming, encrypted secret storage, and caching.
+- `ui/` — Compose screens and their ViewModels.
+- `service/RunWatchService.kt` — foreground service that keeps the stream alive in the background.
+- `update/` — reading `latest.json` and installing the APK through `PackageInstaller`.
 
-Batasan versi dependensi dan aturan kontribusi ada di [AGENTS.md](AGENTS.md).
+Dependency version constraints and contribution rules live in [AGENTS.md](AGENTS.md).

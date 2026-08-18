@@ -1,4 +1,4 @@
-package dev.aifih.onthefly.ui.theme
+package dev.aifih.volare.ui.theme
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -27,7 +27,7 @@ private val DarkScheme = darkColorScheme(
 )
 
 @Composable
-fun OnTheFlyTheme(
+fun VolareTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {

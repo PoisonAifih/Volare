@@ -1,7 +1,7 @@
 name: Release
 
 # Every push to main publishes a new build, so the phone can pull it with the in-app
-# "Cek update" button without touching a computer.
+# "Check for updates" button without touching a computer.
 on:
   push:
     branches: [main]
@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  RELEASES_REPO: PoisonAifih/OnTheFly-ApkRelease
+  RELEASES_REPO: PoisonAifih/Volare-ApkRelease
 
 jobs:
   release:
@@ -69,27 +69,30 @@ jobs:
 
       - name: Build signed release APK
         env:
-          ONTHEFLY_VERSION_CODE: ${{ steps.version.outputs.code }}
-          ONTHEFLY_KEYSTORE_PASSWORD: ${{ secrets.ONTHEFLY_KEYSTORE_PASSWORD }}
-          ONTHEFLY_KEY_ALIAS: ${{ secrets.ONTHEFLY_KEY_ALIAS }}
-          ONTHEFLY_KEY_PASSWORD: ${{ secrets.ONTHEFLY_KEY_PASSWORD }}
+          VOLARE_VERSION_CODE: ${{ steps.version.outputs.code }}
+          # The secrets keep their original ONTHEFLY_ spelling. They are configured in GitHub,
+          # not in this repository, so renaming them here would only make the lookup return
+          # nothing. This step is where the two naming schemes meet.
+          VOLARE_KEYSTORE_PASSWORD: ${{ secrets.ONTHEFLY_KEYSTORE_PASSWORD }}
+          VOLARE_KEY_ALIAS: ${{ secrets.ONTHEFLY_KEY_ALIAS }}
+          VOLARE_KEY_PASSWORD: ${{ secrets.ONTHEFLY_KEY_PASSWORD }}
         run: |
           # An empty value here makes Gradle fail with the opaque "SigningConfig is missing
-          # required property" instead of naming the secret that is absent.
-          for name in ONTHEFLY_KEYSTORE_PASSWORD ONTHEFLY_KEY_ALIAS ONTHEFLY_KEY_PASSWORD; do
+          # required property" instead of naming the value that is absent.
+          for name in VOLARE_KEYSTORE_PASSWORD VOLARE_KEY_ALIAS VOLARE_KEY_PASSWORD; do
             if [ -z "${!name}" ]; then
-              echo "::error::Secret $name is not set."
+              echo "::error::$name is empty. Check the matching ONTHEFLY_ secret in repository settings."
               exit 1
             fi
           done
 
-          export ONTHEFLY_KEYSTORE_PATH="$RUNNER_TEMP/release.jks"
+          export VOLARE_KEYSTORE_PATH="$RUNNER_TEMP/release.jks"
           ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleRelease
 
       - name: Stage APK
         id: apk
         run: |
-          name="onthefly-${{ steps.version.outputs.name }}.apk"
+          name="volare-${{ steps.version.outputs.name }}.apk"
           cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/$name"
           echo "name=$name" >> "$GITHUB_OUTPUT"
           echo "path=$RUNNER_TEMP/$name" >> "$GITHUB_OUTPUT"
@@ -105,7 +108,7 @@ jobs:
           gh release create "${{ steps.version.outputs.tag }}" \
             "${{ steps.apk.outputs.path }}" \
             --repo "$RELEASES_REPO" \
-            --title "OnTheFly ${{ steps.version.outputs.name }}" \
+            --title "Volare ${{ steps.version.outputs.name }}" \
             --notes "$NOTES"
 
           # Transitional. Builds up to the public-repo switch download by asset id and refuse

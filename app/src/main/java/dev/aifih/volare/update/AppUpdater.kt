@@ -1,4 +1,4 @@
-package dev.aifih.onthefly.update
+package dev.aifih.volare.update
 
 import android.app.PendingIntent
 import android.content.Context
@@ -19,16 +19,6 @@ import okhttp3.Response
 
 /**
  * Checks the releases repository for a newer build and installs it.
- *
- * On Android 12 and newer this replaces the app without any confirmation dialog: the
- * documented exemption for an installer "updating itself" applies, provided the app holds
- * `UPDATE_PACKAGES_WITHOUT_USER_ACTION` and the session sets `USER_ACTION_NOT_REQUIRED`.
- * The system can still demand confirmation, so callers must handle
- * [InstallEvent.PendingUserAction].
- *
- * The update must be signed with the same key as the installed build, which is why CI signs
- * releases with a fixed keystore rather than the per-machine debug key. That signature check
- * is what protects this channel: an APK from anywhere else simply fails to install.
  *
  * The releases repository is public, so both requests are anonymous. That keeps the app off
  * the GitHub API and its unauthenticated rate limit entirely.
@@ -78,10 +68,6 @@ class AppUpdater(
         }
     }
 
-    /**
-     * Downloads the APK, reporting progress as a 0..1 fraction. Progress stays at 0 while the
-     * server has not told us the total size.
-     */
     suspend fun download(
         manifest: UpdateManifest,
         onProgress: (Float) -> Unit,
@@ -92,8 +78,7 @@ class AppUpdater(
         val target = File(context.cacheDir, "update-${manifest.versionCode}.apk")
         if (target.exists()) target.delete()
 
-        // Redirects to signed storage are followed by OkHttp. Nothing is attached to the
-        // request, so there is no credential to leak to the redirect target.
+        // Redirects to signed storage are followed by OkHttp.
         client.newCall(Request.Builder().url(apkUrl).build()).execute().use { response ->
             if (!response.isSuccessful) throw describe(response)
 
@@ -152,10 +137,6 @@ class AppUpdater(
         }
     }
 
-    /**
-     * FLAG_MUTABLE is required so the system can attach the status extras, and on
-     * Android 12+ the confirmation intent, to this PendingIntent.
-     */
     private fun statusIntentSender(sessionId: Int) = PendingIntent.getBroadcast(
         context,
         sessionId,
@@ -177,15 +158,10 @@ class AppUpdater(
             .setData("package:${context.packageName}".toUri())
 
     private companion object {
-        /** Change this if the releases repository is renamed. */
-        const val REPO = "PoisonAifih/OnTheFly-ApkRelease"
+        const val REPO = "PoisonAifih/Volare-ApkRelease"
 
-        /**
-         * Raw file hosting sits behind a CDN that can serve the previous copy for a few
-         * minutes, so a release can take that long to become visible to the phone.
-         */
         const val MANIFEST_URL = "https://raw.githubusercontent.com/$REPO/main/latest.json"
 
-        const val APK_NAME = "onthefly.apk"
+        const val APK_NAME = "volare.apk"
     }
 }

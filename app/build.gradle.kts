@@ -9,26 +9,24 @@ plugins {
 
 // CI passes the run number so every published build outranks the previous one. Local
 // builds stay at 1, which is fine because they are never published.
-val appVersionCode = (System.getenv("ONTHEFLY_VERSION_CODE") ?: "1").toInt()
+val appVersionCode = (System.getenv("VOLARE_VERSION_CODE") ?: "1").toInt()
 
-// Release signing is only configured when all four values are present, so a plain
-// `assembleRelease` on a machine without the keystore still works (signed with debug).
 // Deliberately not named `keyAlias`/`keyPassword`: inside the signingConfigs block those
 // names resolve to SigningConfig's own properties, silently assigning null.
-val signingStorePath: String? = System.getenv("ONTHEFLY_KEYSTORE_PATH")
-val signingStorePassword: String? = System.getenv("ONTHEFLY_KEYSTORE_PASSWORD")
-val signingKeyAlias: String? = System.getenv("ONTHEFLY_KEY_ALIAS")
-val signingKeyPassword: String? = System.getenv("ONTHEFLY_KEY_PASSWORD")
+val signingStorePath: String? = System.getenv("VOLARE_KEYSTORE_PATH")
+val signingStorePassword: String? = System.getenv("VOLARE_KEYSTORE_PASSWORD")
+val signingKeyAlias: String? = System.getenv("VOLARE_KEY_ALIAS")
+val signingKeyPassword: String? = System.getenv("VOLARE_KEY_PASSWORD")
 val hasReleaseSigning =
     listOf(signingStorePath, signingStorePassword, signingKeyAlias, signingKeyPassword)
         .none { it.isNullOrBlank() }
 
 android {
-    namespace = "dev.aifih.onthefly"
+    namespace = "dev.aifih.volare"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "dev.aifih.onthefly"
+        applicationId = "dev.aifih.volare"
         minSdk = 26
         targetSdk = 36
         versionCode = appVersionCode

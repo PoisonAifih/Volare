@@ -1,4 +1,4 @@
-package dev.aifih.onthefly.ui
+package dev.aifih.volare.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -44,13 +46,13 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import dev.aifih.onthefly.ServiceLocator
-import dev.aifih.onthefly.data.Agent
-import dev.aifih.onthefly.data.CursorApiException
-import dev.aifih.onthefly.data.Run
-import dev.aifih.onthefly.data.RunEvent
-import dev.aifih.onthefly.data.RunStatus
-import dev.aifih.onthefly.service.RunWatchService
+import dev.aifih.volare.ServiceLocator
+import dev.aifih.volare.data.Agent
+import dev.aifih.volare.data.CursorApiException
+import dev.aifih.volare.data.Run
+import dev.aifih.volare.data.RunEvent
+import dev.aifih.volare.data.RunStatus
+import dev.aifih.volare.service.RunWatchService
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -177,16 +179,10 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
         _state.update { it.copy(run = run, status = run.status) }
     }
 
-    /**
-     * The stream is best effort: it can end on an error event or simply close before the run
-     * reports a result. GET run is authoritative, so reconcile against it and only surface the
-     * stream error when the run really is still going.
-     */
     private suspend fun settle(runId: String, streamError: String?) {
         val run = runCatching { repository.getRun(agentId, runId) }.getOrNull()
         val terminal = run != null && RunStatus.isTerminal(run.status)
 
-        // Only when nothing streamed, otherwise the result shows up twice.
         if (terminal && transcript.isBlank()) {
             run.result?.let { appendTranscript(it) }
         }
@@ -484,6 +480,8 @@ private fun FollowUpBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .navigationBarsPadding()
+            .imePadding()
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

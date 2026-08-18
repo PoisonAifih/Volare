@@ -1,4 +1,4 @@
-package dev.aifih.onthefly.data
+package dev.aifih.volare.data
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -95,7 +95,7 @@ class SecretStore(
     }
 
     private companion object {
-        const val FILE_NAME = "onthefly_secrets"
+        const val FILE_NAME = "volare_secrets"
         const val KEYSTORE = "AndroidKeyStore"
         const val TRANSFORMATION = "AES/GCM/NoPadding"
         const val IV_LENGTH = 12

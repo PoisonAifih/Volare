@@ -1,11 +1,11 @@
-package dev.aifih.onthefly
+package dev.aifih.volare
 
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import androidx.core.content.getSystemService
 
-class OnTheFlyApplication : Application() {
+class VolareApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()

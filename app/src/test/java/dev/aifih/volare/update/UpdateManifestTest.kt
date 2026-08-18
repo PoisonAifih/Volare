@@ -1,4 +1,4 @@
-package dev.aifih.onthefly.update
+package dev.aifih.volare.update
 
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
@@ -18,7 +18,7 @@ class UpdateManifestTest {
             {
               "versionCode": 42,
               "versionName": "0.1.42",
-              "apkUrl": "https://github.com/o/r/releases/download/v0.1.42/onthefly-0.1.42.apk",
+              "apkUrl": "https://github.com/o/r/releases/download/v0.1.42/volare-0.1.42.apk",
               "publishedAt": "2026-08-14T08:00:00Z"
             }
         """.trimIndent()
@@ -28,7 +28,7 @@ class UpdateManifestTest {
         assertEquals(42L, manifest.versionCode)
         assertEquals("0.1.42", manifest.versionName)
         assertEquals(
-            "https://github.com/o/r/releases/download/v0.1.42/onthefly-0.1.42.apk",
+            "https://github.com/o/r/releases/download/v0.1.42/volare-0.1.42.apk",
             manifest.apkUrl,
         )
         assertNull(manifest.notes)

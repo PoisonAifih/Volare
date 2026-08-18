@@ -1,4 +1,4 @@
-package dev.aifih.onthefly.data
+package dev.aifih.volare.data
 
 import java.io.IOException
 import kotlinx.coroutines.Dispatchers

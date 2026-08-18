@@ -1,10 +1,11 @@
-package dev.aifih.onthefly.ui
+package dev.aifih.volare.ui
 
 import android.Manifest
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -13,8 +14,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import dev.aifih.onthefly.ServiceLocator
-import dev.aifih.onthefly.ui.theme.OnTheFlyTheme
+import dev.aifih.volare.ServiceLocator
+import dev.aifih.volare.ui.theme.VolareTheme
 
 class MainActivity : ComponentActivity() {
 
@@ -22,16 +23,21 @@ class MainActivity : ComponentActivity() {
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Without this the window stays decor fitted, `WindowInsets.ime` is never dispatched,
+        // and every `imePadding()` in the app silently measures zero. Android 15 also stopped
+        // resizing the window for `adjustResize`, so nothing else moves content off the
+        // keyboard either.
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
         setContent {
-            OnTheFlyTheme {
+            VolareTheme {
                 LaunchedEffect(Unit) {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                         notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
                     }
                 }
-                OnTheFlyNavHost()
+                VolareNavHost()
             }
         }
     }
@@ -48,7 +54,7 @@ object Routes {
 }
 
 @Composable
-private fun OnTheFlyNavHost() {
+private fun VolareNavHost() {
     val navController = rememberNavController()
     val start = if (ServiceLocator.apiKeyStore.isConfigured()) Routes.AGENTS else Routes.API_KEY
 
