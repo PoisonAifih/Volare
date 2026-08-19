@@ -69,15 +69,16 @@ class DtoTest {
     }
 
     @Test
-    fun `create run request can request pull request creation`() {
+    fun `create run request omits unsupported fields`() {
         val request = CreateRunRequest(
             prompt = Prompt("Open a pull request for the current branch."),
-            autoCreatePR = true,
+            mode = "agent",
         )
 
         val encoded = json.encodeToString(CreateRunRequest.serializer(), request)
 
-        assertTrue(encoded.contains("\"autoCreatePR\":true"))
+        assertFalse(encoded.contains("autoCreatePR"))
+        assertTrue(encoded.contains("\"mode\":\"agent\""))
     }
 
     @Test
