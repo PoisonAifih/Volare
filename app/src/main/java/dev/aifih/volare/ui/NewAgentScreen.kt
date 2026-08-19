@@ -69,6 +69,7 @@ data class NewAgentUiState(
     val submitting: Boolean = false,
     val notice: String? = null,
     val error: String? = null,
+    val submitRetry: Boolean = false,
 )
 
 class NewAgentViewModel : ViewModel() {
@@ -86,7 +87,8 @@ class NewAgentViewModel : ViewModel() {
     )
     val state: StateFlow<NewAgentUiState> = _state.asStateFlow()
 
-    fun onPromptChange(value: String) = _state.update { it.copy(prompt = value, error = null) }
+    fun onPromptChange(value: String) =
+        _state.update { it.copy(prompt = value, error = null, submitRetry = false) }
 
     fun onStartingRefChange(value: String) = _state.update { it.copy(startingRef = value) }
 
@@ -161,7 +163,7 @@ class NewAgentViewModel : ViewModel() {
             return
         }
 
-        _state.update { it.copy(submitting = true, error = null) }
+        _state.update { it.copy(submitting = true, error = null, submitRetry = false) }
 
         viewModelScope.launch {
             val request = CreateAgentRequest(
@@ -187,6 +189,7 @@ class NewAgentViewModel : ViewModel() {
                         it.copy(
                             submitting = false,
                             error = cause.message ?: "Could not create the agent",
+                            submitRetry = cause.isRetryableNetworkFailure(),
                         )
                     }
                 },
@@ -195,7 +198,12 @@ class NewAgentViewModel : ViewModel() {
     }
 
     private fun reportRepoFailure(cause: Throwable) {
-        _state.update { it.copy(error = cause.message ?: "Could not load the repository list") }
+        _state.update {
+            it.copy(
+                error = cause.message ?: "Could not load the repository list",
+                submitRetry = false,
+            )
+        }
     }
 }
 
@@ -338,10 +346,13 @@ fun NewAgentScreen(onBack: () -> Unit, onCreated: (String) -> Unit) {
 
             state.error?.let { error ->
                 Spacer(Modifier.height(12.dp))
-                Text(
-                    text = error,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
+                RetryableError(
+                    message = error,
+                    onRetry = if (state.submitRetry) {
+                        { viewModel.submit(onCreated) }
+                    } else {
+                        null
+                    },
                 )
             }
 

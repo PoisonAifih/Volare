@@ -3,17 +3,50 @@ package dev.aifih.volare.ui
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import dev.aifih.volare.data.CursorApiException
 import dev.aifih.volare.data.RunStatus
+import java.io.IOException
 import java.time.Duration
 import java.time.Instant
+
+private val RETRYABLE_PHRASES = listOf(
+    "unable to resolve host",
+    "no address associated with hostname",
+    "failed to connect",
+    "connection reset",
+    "connection refused",
+    "network is unreachable",
+    "timeout",
+    "timed out",
+    "stream connection was lost",
+    "resource_exhausted",
+    "could not reach",
+    "software caused connection abort",
+)
+
+fun Throwable.isRetryableNetworkFailure(): Boolean {
+    if (this is CursorApiException && isAgentBusy) return false
+    if (this is IOException) return true
+    return message.isRetryableNetworkFailure()
+}
+
+fun String?.isRetryableNetworkFailure(): Boolean {
+    if (this == null) return false
+    val lower = lowercase()
+    return RETRYABLE_PHRASES.any { lower.contains(it) }
+}
 
 fun Context.openUrl(url: String) {
     runCatching {
@@ -47,6 +80,28 @@ fun formatDuration(millis: Long?): String? {
     val seconds = totalSeconds % 60
 
     return if (minutes > 0) "${minutes}m ${seconds}s" else "${seconds}s"
+}
+
+@Composable
+fun RetryableError(
+    message: String,
+    onRetry: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier) {
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+
+        if (onRetry != null) {
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(onClick = onRetry) {
+                Text("Retry")
+            }
+        }
+    }
 }
 
 @Composable

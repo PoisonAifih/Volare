@@ -62,6 +62,12 @@ import kotlinx.coroutines.launch
 
 data class ToolLine(val callId: String, val name: String, val status: String)
 
+enum class AgentDetailRetry {
+    Reload,
+    ResendFollowUp,
+    ReconnectStream,
+}
+
 data class AgentDetailUiState(
     val agent: Agent? = null,
     val run: Run? = null,
@@ -74,6 +80,7 @@ data class AgentDetailUiState(
     val cancelling: Boolean = false,
     val error: String? = null,
     val notice: String? = null,
+    val retry: AgentDetailRetry? = null,
 ) {
     val isActive: Boolean get() = status != null && !RunStatus.isTerminal(status)
 
@@ -99,12 +106,20 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
     }
 
     fun load() {
-        _state.update { it.copy(loading = true, error = null) }
+        _state.update { it.copy(loading = true, error = null, retry = null) }
 
         viewModelScope.launch {
             val agent = runCatching { repository.getAgent(agentId) }.getOrElse { cause ->
                 _state.update {
-                    it.copy(loading = false, error = cause.message ?: "Could not load the agent")
+                    it.copy(
+                        loading = false,
+                        error = cause.message ?: "Could not load the agent",
+                        retry = if (cause.isRetryableNetworkFailure()) {
+                            AgentDetailRetry.Reload
+                        } else {
+                            null
+                        },
+                    )
                 }
                 return@launch
             }
@@ -191,7 +206,18 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
             it.copy(
                 run = run ?: it.run,
                 status = run?.status ?: it.status,
-                error = if (terminal) null else streamError ?: it.error,
+                error = if (terminal) {
+                    null
+                } else {
+                    streamError ?: it.error
+                },
+                retry = if (terminal || streamError == null) {
+                    null
+                } else if (streamError.isRetryableNetworkFailure()) {
+                    AgentDetailRetry.ReconnectStream
+                } else {
+                    null
+                },
             )
         }
     }
@@ -201,13 +227,14 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
         _state.update { it.copy(transcript = transcript.toString()) }
     }
 
-    fun onFollowUpChange(value: String) = _state.update { it.copy(followUp = value, notice = null) }
+    fun onFollowUpChange(value: String) =
+        _state.update { it.copy(followUp = value, notice = null, error = null, retry = null) }
 
     fun sendFollowUp() {
         val prompt = _state.value.followUp.trim()
         if (prompt.isEmpty() || _state.value.sending) return
 
-        _state.update { it.copy(sending = true, error = null, notice = null) }
+        _state.update { it.copy(sending = true, error = null, notice = null, retry = null) }
 
         viewModelScope.launch {
             runCatching { repository.createRun(agentId, prompt) }.fold(
@@ -240,10 +267,31 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
                             } else {
                                 cause.message ?: "Could not send the follow-up"
                             },
+                            retry = if (!busy && cause.isRetryableNetworkFailure()) {
+                                AgentDetailRetry.ResendFollowUp
+                            } else {
+                                null
+                            },
                         )
                     }
                 },
             )
+        }
+    }
+
+    fun retry() {
+        when (_state.value.retry) {
+            AgentDetailRetry.Reload -> load()
+
+            AgentDetailRetry.ResendFollowUp -> sendFollowUp()
+
+            AgentDetailRetry.ReconnectStream -> {
+                val runId = _state.value.run?.id ?: return
+                _state.update { it.copy(error = null, retry = null) }
+                startStreaming(runId)
+            }
+
+            null -> Unit
         }
     }
 
@@ -370,10 +418,9 @@ fun AgentDetailScreen(agentId: String, onBack: () -> Unit) {
 
             state.error?.let { error ->
                 Spacer(Modifier.height(8.dp))
-                Text(
-                    text = error,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
+                RetryableError(
+                    message = error,
+                    onRetry = state.retry?.let { { viewModel.retry() } },
                 )
             }
 
