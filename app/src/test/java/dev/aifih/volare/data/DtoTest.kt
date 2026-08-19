@@ -69,6 +69,28 @@ class DtoTest {
     }
 
     @Test
+    fun `create run request can request pull request creation`() {
+        val request = CreateRunRequest(
+            prompt = Prompt("Open a pull request for the current branch."),
+            autoCreatePR = true,
+        )
+
+        val encoded = json.encodeToString(CreateRunRequest.serializer(), request)
+
+        assertTrue(encoded.contains("\"autoCreatePR\":true"))
+    }
+
+    @Test
+    fun `legacy ask mode maps to agent`() {
+        assertEquals(AgentMode.AGENT, AgentMode.fromString("ask"))
+    }
+
+    @Test
+    fun `only agent and plan modes are selectable`() {
+        assertEquals(listOf(AgentMode.AGENT, AgentMode.PLAN), AgentMode.selectableModes)
+    }
+
+    @Test
     fun `create request omits null fields so the server applies its defaults`() {
         val request = CreateAgentRequest(
             prompt = Prompt("fix login"),
