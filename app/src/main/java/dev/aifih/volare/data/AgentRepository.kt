@@ -56,10 +56,6 @@ class AgentRepository(
         get() = prefs.getString(KEY_LAST_MODEL, null)
         set(value) = prefs.edit().putString(KEY_LAST_MODEL, value).apply()
 
-    var lastAutoCreatePr: Boolean
-        get() = prefs.getBoolean(KEY_LAST_AUTO_PR, true)
-        set(value) = prefs.edit().putBoolean(KEY_LAST_AUTO_PR, value).apply()
-
     var lastMode: AgentMode
         get() = AgentMode.fromString(prefs.getString(KEY_LAST_MODE, null))
         set(value) = prefs.edit().putString(KEY_LAST_MODE, value.apiValue).apply()
@@ -77,8 +73,15 @@ class AgentRepository(
     suspend fun createAgent(request: CreateAgentRequest): CreateAgentResponse =
         api.createAgent(request)
 
-    suspend fun createRun(agentId: String, prompt: String, mode: String? = null): Run =
-        api.createRun(agentId, CreateRunRequest(Prompt(prompt), mode)).run
+    suspend fun createRun(
+        agentId: String,
+        prompt: String,
+        mode: String? = null,
+        autoCreatePR: Boolean? = null,
+    ): Run = api.createRun(
+        agentId,
+        CreateRunRequest(Prompt(prompt), mode, autoCreatePR),
+    ).run
 
     suspend fun cancelRun(agentId: String, runId: String) {
         api.cancelRun(agentId, runId)
@@ -120,7 +123,6 @@ class AgentRepository(
         const val KEY_MODELS_AT = "cache_models_at"
         const val KEY_LAST_REPO = "last_repo_url"
         const val KEY_LAST_MODEL = "last_model_id"
-        const val KEY_LAST_AUTO_PR = "last_auto_create_pr"
         const val KEY_LAST_MODE = "last_mode"
 
         const val REPOS_MIN_INTERVAL_MS = 65_000L
