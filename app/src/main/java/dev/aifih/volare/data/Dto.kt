@@ -224,3 +224,13 @@ data class SseErrorPayload(
     @SerialName("code") val code: String? = null,
     @SerialName("message") val message: String? = null,
 )
+
+enum class AgentMode(val apiValue: String?, val label: String) {
+    AGENT(null, "Agent"),
+    PLAN("plan", "Plan first"),
+    ASK("ask", "Ask");
+
+    companion object {
+        fun fromString(value: String?): AgentMode = entries.find { it.apiValue == value } ?: AGENT
+    }
+}

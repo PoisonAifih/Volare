@@ -60,6 +60,10 @@ class AgentRepository(
         get() = prefs.getBoolean(KEY_LAST_AUTO_PR, true)
         set(value) = prefs.edit().putBoolean(KEY_LAST_AUTO_PR, value).apply()
 
+    var lastMode: AgentMode
+        get() = AgentMode.fromString(prefs.getString(KEY_LAST_MODE, null))
+        set(value) = prefs.edit().putString(KEY_LAST_MODE, value.apiValue).apply()
+
     suspend fun me(): MeResponse = api.me()
 
     suspend fun listAgents(cursor: String? = null): AgentListResponse = api.listAgents(cursor = cursor)
@@ -117,6 +121,7 @@ class AgentRepository(
         const val KEY_LAST_REPO = "last_repo_url"
         const val KEY_LAST_MODEL = "last_model_id"
         const val KEY_LAST_AUTO_PR = "last_auto_create_pr"
+        const val KEY_LAST_MODE = "last_mode"
 
         const val REPOS_MIN_INTERVAL_MS = 65_000L
         const val REPOS_TTL_MS = 6 * 60 * 60 * 1000L

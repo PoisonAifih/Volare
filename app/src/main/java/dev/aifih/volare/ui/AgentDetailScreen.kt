@@ -19,6 +19,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,6 +49,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import dev.aifih.volare.ServiceLocator
 import dev.aifih.volare.data.Agent
+import dev.aifih.volare.data.AgentMode
 import dev.aifih.volare.data.CursorApiException
 import dev.aifih.volare.data.Run
 import dev.aifih.volare.data.RunEvent
@@ -69,6 +71,7 @@ data class AgentDetailUiState(
     val transcript: String = "",
     val tools: List<ToolLine> = emptyList(),
     val followUp: String = "",
+    val selectedMode: AgentMode = AgentMode.AGENT,
     val loading: Boolean = true,
     val sending: Boolean = false,
     val cancelling: Boolean = false,
@@ -88,7 +91,9 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
 
     private val repository = ServiceLocator.repository
 
-    private val _state = MutableStateFlow(AgentDetailUiState())
+    private val _state = MutableStateFlow(
+        AgentDetailUiState(selectedMode = repository.lastMode)
+    )
     val state: StateFlow<AgentDetailUiState> = _state.asStateFlow()
 
     private var streamJob: Job? = null
@@ -203,14 +208,20 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
 
     fun onFollowUpChange(value: String) = _state.update { it.copy(followUp = value, notice = null) }
 
+    fun onModeSelected(mode: AgentMode) {
+        repository.lastMode = mode
+        _state.update { it.copy(selectedMode = mode) }
+    }
+
     fun sendFollowUp() {
-        val prompt = _state.value.followUp.trim()
-        if (prompt.isEmpty() || _state.value.sending) return
+        val current = _state.value
+        val prompt = current.followUp.trim()
+        if (prompt.isEmpty() || current.sending) return
 
         _state.update { it.copy(sending = true, error = null, notice = null) }
 
         viewModelScope.launch {
-            runCatching { repository.createRun(agentId, prompt) }.fold(
+            runCatching { repository.createRun(agentId, prompt, current.selectedMode.apiValue) }.fold(
                 onSuccess = { run ->
                     appendTranscript("\n\n> $prompt\n\n")
                     _state.update {
@@ -318,8 +329,10 @@ fun AgentDetailScreen(agentId: String, onBack: () -> Unit) {
         bottomBar = {
             FollowUpBar(
                 value = state.followUp,
+                selectedMode = state.selectedMode,
                 sending = state.sending,
                 onValueChange = viewModel::onFollowUpChange,
+                onModeSelected = viewModel::onModeSelected,
                 onSend = viewModel::sendFollowUp,
             )
         },
@@ -468,33 +481,48 @@ private fun ResultLinks(branch: String?, prUrl: String?, onOpenPr: (String) -> U
 @Composable
 private fun FollowUpBar(
     value: String,
+    selectedMode: AgentMode,
     sending: Boolean,
     onValueChange: (String) -> Unit,
+    onModeSelected: (AgentMode) -> Unit,
     onSend: () -> Unit,
 ) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
             .imePadding()
             .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            placeholder = { Text("Send a follow-up…") },
-            maxLines = 4,
-            modifier = Modifier.weight(1f),
-        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            AgentMode.entries.forEach { mode ->
+                FilterChip(
+                    selected = selectedMode == mode,
+                    onClick = { onModeSelected(mode) },
+                    label = { Text(mode.label) },
+                )
+            }
+        }
 
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.height(8.dp))
 
-        IconButton(onClick = onSend, enabled = !sending && value.isNotBlank()) {
-            if (sending) {
-                CircularProgressIndicator(Modifier.height(18.dp), strokeWidth = 2.dp)
-            } else {
-                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = value,
+                onValueChange = onValueChange,
+                placeholder = { Text("Send a follow-up…") },
+                maxLines = 4,
+                modifier = Modifier.weight(1f),
+            )
+
+            Spacer(Modifier.width(8.dp))
+
+            IconButton(onClick = onSend, enabled = !sending && value.isNotBlank()) {
+                if (sending) {
+                    CircularProgressIndicator(Modifier.height(18.dp), strokeWidth = 2.dp)
+                } else {
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
+                }
             }
         }
     }
