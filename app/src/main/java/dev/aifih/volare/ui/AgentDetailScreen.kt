@@ -24,6 +24,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -68,6 +69,7 @@ enum class AgentDetailRetry {
     Reload,
     ResendFollowUp,
     ReconnectStream,
+    CreatePullRequest,
 }
 
 data class AgentDetailUiState(
@@ -80,6 +82,7 @@ data class AgentDetailUiState(
     val selectedMode: AgentMode = AgentMode.AGENT,
     val loading: Boolean = true,
     val sending: Boolean = false,
+    val creatingPr: Boolean = false,
     val cancelling: Boolean = false,
     val error: String? = null,
     val notice: String? = null,
@@ -92,6 +95,8 @@ data class AgentDetailUiState(
     val prUrl: String? get() = run?.git?.branches?.firstNotNullOfOrNull { it.prUrl }
 
     val branch: String? get() = run?.git?.branches?.firstNotNullOfOrNull { it.branch }
+
+    val canCreatePr: Boolean get() = !isActive && branch != null && prUrl == null
 }
 
 class AgentDetailViewModel(private val agentId: String) : ViewModel() {
@@ -290,11 +295,66 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
         }
     }
 
+    fun createPullRequest() {
+        val current = _state.value
+        if (!current.canCreatePr || current.creatingPr) return
+
+        _state.update { it.copy(creatingPr = true, error = null, notice = null, retry = null) }
+
+        viewModelScope.launch {
+            runCatching {
+                repository.createRun(
+                    agentId = agentId,
+                    prompt = CREATE_PR_PROMPT,
+                    autoCreatePR = true,
+                )
+            }.fold(
+                onSuccess = { run ->
+                    appendTranscript("\n\n> Create pull request\n\n")
+                    _state.update {
+                        it.copy(
+                            creatingPr = false,
+                            run = run,
+                            status = run.status,
+                            tools = emptyList(),
+                        )
+                    }
+                    startStreaming(run.id)
+                },
+                onFailure = { cause ->
+                    val busy = cause is CursorApiException && cause.isAgentBusy
+                    _state.update {
+                        it.copy(
+                            creatingPr = false,
+                            notice = if (busy) {
+                                "The agent is still working. Wait for it to finish or cancel it first."
+                            } else {
+                                null
+                            },
+                            error = if (busy) {
+                                null
+                            } else {
+                                cause.message ?: "Could not create the pull request"
+                            },
+                            retry = if (!busy && cause.isRetryableNetworkFailure()) {
+                                AgentDetailRetry.CreatePullRequest
+                            } else {
+                                null
+                            },
+                        )
+                    }
+                },
+            )
+        }
+    }
+
     fun retry() {
         when (_state.value.retry) {
             AgentDetailRetry.Reload -> load()
 
             AgentDetailRetry.ResendFollowUp -> sendFollowUp()
+
+            AgentDetailRetry.CreatePullRequest -> createPullRequest()
 
             AgentDetailRetry.ReconnectStream -> {
                 val runId = _state.value.run?.id ?: return
@@ -323,6 +383,9 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
 
     private companion object {
         const val MAX_TOOL_LINES = 6
+        const val CREATE_PR_PROMPT =
+            "Open a pull request for the current branch with all committed changes. " +
+                "Do not modify any code."
     }
 }
 
@@ -442,11 +505,14 @@ fun AgentDetailScreen(agentId: String, onBack: () -> Unit) {
                 ToolActivity(state.tools)
             }
 
-            if (state.branch != null || state.prUrl != null) {
+            if (state.branch != null || state.prUrl != null || state.canCreatePr) {
                 Spacer(Modifier.height(8.dp))
                 ResultLinks(
                     branch = state.branch,
                     prUrl = state.prUrl,
+                    canCreatePr = state.canCreatePr,
+                    creatingPr = state.creatingPr,
+                    onCreatePr = viewModel::createPullRequest,
                     onOpenPr = { url -> context.openUrl(url) },
                 )
             }
@@ -506,7 +572,14 @@ private fun ToolActivity(tools: List<ToolLine>) {
 }
 
 @Composable
-private fun ResultLinks(branch: String?, prUrl: String?, onOpenPr: (String) -> Unit) {
+private fun ResultLinks(
+    branch: String?,
+    prUrl: String?,
+    canCreatePr: Boolean,
+    creatingPr: Boolean,
+    onCreatePr: () -> Unit,
+    onOpenPr: (String) -> Unit,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         branch?.let {
             Text(
@@ -517,9 +590,17 @@ private fun ResultLinks(branch: String?, prUrl: String?, onOpenPr: (String) -> U
             )
         }
 
-        prUrl?.let { url ->
-            OutlinedButton(onClick = { onOpenPr(url) }) {
-                Text("Open pull request")
+        when {
+            prUrl != null -> {
+                OutlinedButton(onClick = { onOpenPr(prUrl) }) {
+                    Text("Open pull request")
+                }
+            }
+
+            canCreatePr -> {
+                Button(onClick = onCreatePr, enabled = !creatingPr) {
+                    Text(if (creatingPr) "Creating pull request…" else "Create pull request")
+                }
             }
         }
     }
@@ -542,7 +623,7 @@ private fun FollowUpBar(
             .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            AgentMode.entries.forEach { mode ->
+            AgentMode.selectableModes.forEach { mode ->
                 FilterChip(
                     selected = selectedMode == mode,
                     onClick = { onModeSelected(mode) },

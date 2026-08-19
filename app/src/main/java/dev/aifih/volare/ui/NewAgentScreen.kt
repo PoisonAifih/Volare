@@ -26,7 +26,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -64,7 +63,6 @@ data class NewAgentUiState(
     val selectedRepoUrl: String? = null,
     val selectedModelId: String? = null,
     val startingRef: String = "main",
-    val autoCreatePr: Boolean = true,
     val selectedMode: AgentMode = AgentMode.AGENT,
     val refreshingRepos: Boolean = false,
     val submitting: Boolean = false,
@@ -83,7 +81,6 @@ class NewAgentViewModel : ViewModel() {
             models = repository.cachedModels(),
             selectedRepoUrl = repository.lastRepoUrl,
             selectedModelId = repository.lastModelId,
-            autoCreatePr = repository.lastAutoCreatePr,
             selectedMode = repository.lastMode,
         ),
     )
@@ -102,11 +99,6 @@ class NewAgentViewModel : ViewModel() {
     fun onModelSelected(id: String?) {
         repository.lastModelId = id
         _state.update { it.copy(selectedModelId = id) }
-    }
-
-    fun onAutoCreatePrChange(value: Boolean) {
-        repository.lastAutoCreatePr = value
-        _state.update { it.copy(autoCreatePr = value) }
     }
 
     fun onModeSelected(mode: AgentMode) {
@@ -180,7 +172,6 @@ class NewAgentViewModel : ViewModel() {
                         startingRef = current.startingRef.trim().ifBlank { null },
                     ),
                 ),
-                autoCreatePR = current.autoCreatePr,
                 mode = current.selectedMode.apiValue,
             )
 
@@ -310,25 +301,8 @@ fun NewAgentScreen(onBack: () -> Unit, onCreated: (String) -> Unit) {
 
             Spacer(Modifier.height(16.dp))
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Create PR automatically", style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        text = "Recommended: a PR is far easier to review from a phone",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = state.autoCreatePr,
-                    onCheckedChange = viewModel::onAutoCreatePrChange,
-                )
-            }
-
-            Spacer(Modifier.height(12.dp))
-
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                AgentMode.entries.forEach { mode ->
+                AgentMode.selectableModes.forEach { mode ->
                     FilterChip(
                         selected = state.selectedMode == mode,
                         onClick = { viewModel.onModeSelected(mode) },
