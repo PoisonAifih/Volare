@@ -120,6 +120,7 @@ data class RunListResponse(
 data class CreateRunRequest(
     val prompt: Prompt,
     val mode: String? = null,
+    val autoCreatePR: Boolean? = null,
 )
 
 @Serializable
@@ -228,9 +229,15 @@ data class SseErrorPayload(
 enum class AgentMode(val apiValue: String?, val label: String) {
     AGENT(null, "Agent"),
     PLAN("plan", "Plan first"),
-    ASK("ask", "Ask");
+    ;
 
     companion object {
-        fun fromString(value: String?): AgentMode = entries.find { it.apiValue == value } ?: AGENT
+        val selectableModes: List<AgentMode> = entries
+
+        fun fromString(value: String?): AgentMode = when (value) {
+            PLAN.apiValue -> PLAN
+            "ask" -> AGENT
+            else -> AGENT
+        }
     }
 }
