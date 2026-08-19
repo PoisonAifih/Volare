@@ -77,10 +77,9 @@ class AgentRepository(
         agentId: String,
         prompt: String,
         mode: String? = null,
-        autoCreatePR: Boolean? = null,
     ): Run = api.createRun(
         agentId,
-        CreateRunRequest(Prompt(prompt), mode, autoCreatePR),
+        CreateRunRequest(Prompt(prompt), mode),
     ).run
 
     suspend fun cancelRun(agentId: String, runId: String) {

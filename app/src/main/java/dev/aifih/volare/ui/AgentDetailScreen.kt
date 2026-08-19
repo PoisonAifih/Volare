@@ -306,7 +306,6 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
                 repository.createRun(
                     agentId = agentId,
                     prompt = CREATE_PR_PROMPT,
-                    autoCreatePR = true,
                 )
             }.fold(
                 onSuccess = { run ->
