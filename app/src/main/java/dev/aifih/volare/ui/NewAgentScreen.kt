@@ -43,6 +43,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.aifih.volare.ServiceLocator
+import dev.aifih.volare.data.AgentMode
 import dev.aifih.volare.data.CreateAgentRequest
 import dev.aifih.volare.data.ModelInfo
 import dev.aifih.volare.data.ModelSelection
@@ -64,7 +65,7 @@ data class NewAgentUiState(
     val selectedModelId: String? = null,
     val startingRef: String = "main",
     val autoCreatePr: Boolean = true,
-    val planMode: Boolean = false,
+    val selectedMode: AgentMode = AgentMode.AGENT,
     val refreshingRepos: Boolean = false,
     val submitting: Boolean = false,
     val notice: String? = null,
@@ -83,6 +84,7 @@ class NewAgentViewModel : ViewModel() {
             selectedRepoUrl = repository.lastRepoUrl,
             selectedModelId = repository.lastModelId,
             autoCreatePr = repository.lastAutoCreatePr,
+            selectedMode = repository.lastMode,
         ),
     )
     val state: StateFlow<NewAgentUiState> = _state.asStateFlow()
@@ -107,7 +109,10 @@ class NewAgentViewModel : ViewModel() {
         _state.update { it.copy(autoCreatePr = value) }
     }
 
-    fun onPlanModeChange(value: Boolean) = _state.update { it.copy(planMode = value) }
+    fun onModeSelected(mode: AgentMode) {
+        repository.lastMode = mode
+        _state.update { it.copy(selectedMode = mode) }
+    }
 
     fun loadInitial() {
         viewModelScope.launch {
@@ -176,7 +181,7 @@ class NewAgentViewModel : ViewModel() {
                     ),
                 ),
                 autoCreatePR = current.autoCreatePr,
-                mode = if (current.planMode) "plan" else null,
+                mode = current.selectedMode.apiValue,
             )
 
             runCatching { repository.createAgent(request) }.fold(
@@ -323,16 +328,13 @@ fun NewAgentScreen(onBack: () -> Unit, onCreated: (String) -> Unit) {
             Spacer(Modifier.height(12.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
-                    selected = !state.planMode,
-                    onClick = { viewModel.onPlanModeChange(false) },
-                    label = { Text("Agent") },
-                )
-                FilterChip(
-                    selected = state.planMode,
-                    onClick = { viewModel.onPlanModeChange(true) },
-                    label = { Text("Plan first") },
-                )
+                AgentMode.entries.forEach { mode ->
+                    FilterChip(
+                        selected = state.selectedMode == mode,
+                        onClick = { viewModel.onModeSelected(mode) },
+                        label = { Text(mode.label) },
+                    )
+                }
             }
 
             state.notice?.let { notice ->
