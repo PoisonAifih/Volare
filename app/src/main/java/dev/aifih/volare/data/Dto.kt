@@ -120,7 +120,6 @@ data class RunListResponse(
 data class CreateRunRequest(
     val prompt: Prompt,
     val mode: String? = null,
-    val autoCreatePR: Boolean? = null,
 )
 
 @Serializable
