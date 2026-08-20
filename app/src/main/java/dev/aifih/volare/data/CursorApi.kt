@@ -46,6 +46,8 @@ class CursorApi(
             serializer = AgentListResponse.serializer(),
             query = buildMap {
                 put("limit", limit.toString())
+                // Default on the server is true; we only want open agents in the phone list.
+                put("includeArchived", "false")
                 if (cursor != null) put("cursor", cursor)
             },
         )
@@ -58,6 +60,13 @@ class CursorApi(
             path = "v1/agents",
             body = encode(CreateAgentRequest.serializer(), request),
             serializer = CreateAgentResponse.serializer(),
+        )
+
+    suspend fun archiveAgent(agentId: String): IdResponse =
+        post(
+            path = "v1/agents/$agentId/archive",
+            body = EMPTY_BODY,
+            serializer = IdResponse.serializer(),
         )
 
     suspend fun listRuns(agentId: String, limit: Int = 30): RunListResponse =

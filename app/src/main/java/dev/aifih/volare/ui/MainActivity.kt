@@ -106,6 +106,7 @@ private fun VolareNavHost() {
             AgentDetailScreen(
                 agentId = entry.arguments?.getString("agentId").orEmpty(),
                 onBack = { navController.popBackStack() },
+                onArchived = { navController.popBackStack() },
             )
         }
     }

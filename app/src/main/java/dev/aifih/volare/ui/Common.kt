@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import dev.aifih.volare.data.AgentStatus
 import dev.aifih.volare.data.CursorApiException
 import dev.aifih.volare.data.RunStatus
 import java.io.IOException
@@ -118,10 +119,10 @@ fun StatusBadge(status: String?, modifier: Modifier = Modifier) {
     val label = status?.uppercase() ?: "UNKNOWN"
 
     val color = when (label) {
-        RunStatus.RUNNING, RunStatus.CREATING -> MaterialTheme.colorScheme.primary
+        RunStatus.RUNNING, RunStatus.CREATING, AgentStatus.ACTIVE -> MaterialTheme.colorScheme.primary
         RunStatus.FINISHED -> Color(0xFF2E7D32)
         RunStatus.ERROR, RunStatus.EXPIRED -> MaterialTheme.colorScheme.error
-        RunStatus.CANCELLED -> MaterialTheme.colorScheme.outline
+        RunStatus.CANCELLED, AgentStatus.ARCHIVED -> MaterialTheme.colorScheme.outline
         else -> MaterialTheme.colorScheme.secondary
     }
 

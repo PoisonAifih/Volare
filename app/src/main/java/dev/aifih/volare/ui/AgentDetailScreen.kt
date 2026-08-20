@@ -54,6 +54,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import dev.aifih.volare.ServiceLocator
 import dev.aifih.volare.data.Agent
 import dev.aifih.volare.data.AgentMode
+import dev.aifih.volare.data.AgentStatus
 import dev.aifih.volare.data.CursorApiException
 import dev.aifih.volare.data.GitBranch
 import dev.aifih.volare.data.Run
@@ -88,7 +89,10 @@ data class AgentDetailUiState(
     val sending: Boolean = false,
     val creatingPr: Boolean = false,
     val cancelling: Boolean = false,
+    val archiving: Boolean = false,
+    val archiveDone: Boolean = false,
     val showCreatePrDialog: Boolean = false,
+    val showArchiveDialog: Boolean = false,
     val error: String? = null,
     val notice: String? = null,
     val retry: AgentDetailRetry? = null,
@@ -96,6 +100,10 @@ data class AgentDetailUiState(
     val isActive: Boolean get() = status != null && !RunStatus.isTerminal(status)
 
     val agentName: String get() = agent?.name ?: agent?.id ?: "Agent"
+
+    val isArchived: Boolean get() = AgentStatus.isArchived(agent?.status)
+
+    val canArchive: Boolean get() = agent != null && !isArchived && !archiving
 
     val isRepoLess: Boolean get() = agent?.repos.isNullOrEmpty()
 
@@ -187,6 +195,7 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
                 tools = emptyList(),
                 notice = null,
                 showCreatePrDialog = false,
+                showArchiveDialog = false,
             )
         }
         load()
@@ -442,6 +451,53 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
         }
     }
 
+    fun openArchiveDialog() {
+        if (!_state.value.canArchive) return
+        _state.update { it.copy(showArchiveDialog = true, error = null, notice = null) }
+    }
+
+    fun dismissArchiveDialog() {
+        _state.update { it.copy(showArchiveDialog = false) }
+    }
+
+    fun confirmArchive() {
+        if (!_state.value.canArchive) return
+
+        _state.update {
+            it.copy(
+                showArchiveDialog = false,
+                archiving = true,
+                error = null,
+                notice = null,
+            )
+        }
+
+        streamJob?.cancel()
+        streamJob = null
+
+        viewModelScope.launch {
+            runCatching { repository.archiveAgent(agentId) }.fold(
+                onSuccess = {
+                    _state.update {
+                        it.copy(
+                            archiving = false,
+                            archiveDone = true,
+                            agent = it.agent?.copy(status = AgentStatus.ARCHIVED),
+                        )
+                    }
+                },
+                onFailure = { cause ->
+                    _state.update {
+                        it.copy(
+                            archiving = false,
+                            error = cause.message ?: "Could not archive the agent",
+                        )
+                    }
+                },
+            )
+        }
+    }
+
     private companion object {
         const val MAX_TOOL_LINES = 6
         const val CREATE_PR_PROMPT =
@@ -452,7 +508,11 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AgentDetailScreen(agentId: String, onBack: () -> Unit) {
+fun AgentDetailScreen(
+    agentId: String,
+    onBack: () -> Unit,
+    onArchived: () -> Unit = onBack,
+) {
     val viewModel: AgentDetailViewModel = viewModel(
         factory = viewModelFactory {
             initializer { AgentDetailViewModel(agentId) }
@@ -464,11 +524,15 @@ fun AgentDetailScreen(agentId: String, onBack: () -> Unit) {
 
     LaunchedEffect(Unit) { RunWatchService.stop(context) }
 
+    LaunchedEffect(state.archiveDone) {
+        if (state.archiveDone) onArchived()
+    }
+
     DisposableEffect(Unit) {
         onDispose {
             val current = latest
             val runId = current.run?.id
-            if (current.isActive && runId != null) {
+            if (current.isActive && runId != null && !current.isArchived) {
                 RunWatchService.start(context, agentId, runId, current.agentName)
             }
         }
@@ -483,6 +547,14 @@ fun AgentDetailScreen(agentId: String, onBack: () -> Unit) {
             existingPrCount = state.branchesWithPr.size,
             onConfirm = viewModel::confirmCreatePullRequest,
             onDismiss = viewModel::dismissCreatePrDialog,
+        )
+    }
+
+    if (state.showArchiveDialog) {
+        ArchiveAgentDialog(
+            agentName = state.agentName,
+            onConfirm = viewModel::confirmArchive,
+            onDismiss = viewModel::dismissArchiveDialog,
         )
     }
 
@@ -505,6 +577,14 @@ fun AgentDetailScreen(agentId: String, onBack: () -> Unit) {
                     IconButton(onClick = viewModel::refresh) {
                         Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
                     }
+                    if (state.canArchive) {
+                        TextButton(
+                            onClick = viewModel::openArchiveDialog,
+                            enabled = !state.archiving,
+                        ) {
+                            Text(if (state.archiving) "Closing…" else "Close")
+                        }
+                    }
                     if (state.transcript.isNotBlank()) {
                         TextButton(
                             onClick = { context.copyText("Transcript", state.transcript) },
@@ -521,15 +601,17 @@ fun AgentDetailScreen(agentId: String, onBack: () -> Unit) {
             )
         },
         bottomBar = {
-            FollowUpBar(
-                value = state.followUp,
-                selectedMode = state.selectedMode,
-                showModeChips = !state.isRepoLess,
-                sending = state.sending,
-                onValueChange = viewModel::onFollowUpChange,
-                onModeSelected = viewModel::onModeSelected,
-                onSend = viewModel::sendFollowUp,
-            )
+            if (!state.isArchived) {
+                FollowUpBar(
+                    value = state.followUp,
+                    selectedMode = state.selectedMode,
+                    showModeChips = !state.isRepoLess,
+                    sending = state.sending,
+                    onValueChange = viewModel::onFollowUpChange,
+                    onModeSelected = viewModel::onModeSelected,
+                    onSend = viewModel::sendFollowUp,
+                )
+            }
         },
     ) { padding ->
         Column(
@@ -614,6 +696,34 @@ fun AgentDetailScreen(agentId: String, onBack: () -> Unit) {
             )
         }
     }
+}
+
+@Composable
+private fun ArchiveAgentDialog(
+    agentName: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Close this agent?") },
+        text = {
+            Text(
+                "“$agentName” will be archived. It stops accepting new runs and " +
+                    "disappears from your agent list. This can be undone on the web.",
+            )
+        },
+        confirmButton = {
+            Button(onClick = onConfirm) {
+                Text("Close agent")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
 }
 
 @Composable

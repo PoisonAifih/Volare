@@ -90,6 +90,10 @@ class AgentRepository(
         api.cancelRun(agentId, runId)
     }
 
+    suspend fun archiveAgent(agentId: String) {
+        api.archiveAgent(agentId)
+    }
+
     /**
      * Everything cached here is derived from one account, so it has to go when the key does.
      * Otherwise the next person to sign in on this device sees the previous account's
