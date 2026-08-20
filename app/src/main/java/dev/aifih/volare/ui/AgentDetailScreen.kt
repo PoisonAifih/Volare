@@ -17,6 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -53,6 +54,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import dev.aifih.volare.ServiceLocator
 import dev.aifih.volare.data.Agent
 import dev.aifih.volare.data.AgentMode
+import dev.aifih.volare.data.AgentStatus
 import dev.aifih.volare.data.CursorApiException
 import dev.aifih.volare.data.GitBranch
 import dev.aifih.volare.data.Run
@@ -87,7 +89,9 @@ data class AgentDetailUiState(
     val sending: Boolean = false,
     val creatingPr: Boolean = false,
     val cancelling: Boolean = false,
+    val archiving: Boolean = false,
     val showCreatePrDialog: Boolean = false,
+    val showArchiveDialog: Boolean = false,
     val error: String? = null,
     val notice: String? = null,
     val retry: AgentDetailRetry? = null,
@@ -95,6 +99,10 @@ data class AgentDetailUiState(
     val isActive: Boolean get() = status != null && !RunStatus.isTerminal(status)
 
     val agentName: String get() = agent?.name ?: agent?.id ?: "Agent"
+
+    val isArchived: Boolean get() = AgentStatus.isArchived(agent?.status)
+
+    val canArchive: Boolean get() = agent != null && !isArchived && !archiving
 
     val isRepoLess: Boolean get() = agent?.repos.isNullOrEmpty()
 
@@ -171,6 +179,25 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
                 }
             }
         }
+    }
+
+    /** Reload agent + run and reconnect the stream, like leaving and re-opening this screen. */
+    fun refresh() {
+        if (_state.value.loading) return
+
+        streamJob?.cancel()
+        streamJob = null
+        transcript.clear()
+        _state.update {
+            it.copy(
+                transcript = "",
+                tools = emptyList(),
+                notice = null,
+                showCreatePrDialog = false,
+                showArchiveDialog = false,
+            )
+        }
+        load()
     }
 
     private fun startStreaming(runId: String) {
@@ -423,6 +450,53 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
         }
     }
 
+    fun openArchiveDialog() {
+        if (!_state.value.canArchive) return
+        _state.update { it.copy(showArchiveDialog = true, error = null, notice = null) }
+    }
+
+    fun dismissArchiveDialog() {
+        _state.update { it.copy(showArchiveDialog = false) }
+    }
+
+    fun confirmArchive() {
+        if (!_state.value.canArchive) return
+
+        _state.update {
+            it.copy(
+                showArchiveDialog = false,
+                archiving = true,
+                error = null,
+                notice = null,
+            )
+        }
+
+        streamJob?.cancel()
+        streamJob = null
+
+        viewModelScope.launch {
+            runCatching { repository.archiveAgent(agentId) }.fold(
+                onSuccess = {
+                    _state.update {
+                        it.copy(
+                            archiving = false,
+                            agent = it.agent?.copy(status = AgentStatus.ARCHIVED),
+                            notice = "Agent deactivated. It stays in your list but will not accept new runs.",
+                        )
+                    }
+                },
+                onFailure = { cause ->
+                    _state.update {
+                        it.copy(
+                            archiving = false,
+                            error = cause.message ?: "Could not archive the agent",
+                        )
+                    }
+                },
+            )
+        }
+    }
+
     private companion object {
         const val MAX_TOOL_LINES = 6
         const val CREATE_PR_PROMPT =
@@ -449,7 +523,7 @@ fun AgentDetailScreen(agentId: String, onBack: () -> Unit) {
         onDispose {
             val current = latest
             val runId = current.run?.id
-            if (current.isActive && runId != null) {
+            if (current.isActive && runId != null && !current.isArchived) {
                 RunWatchService.start(context, agentId, runId, current.agentName)
             }
         }
@@ -464,6 +538,14 @@ fun AgentDetailScreen(agentId: String, onBack: () -> Unit) {
             existingPrCount = state.branchesWithPr.size,
             onConfirm = viewModel::confirmCreatePullRequest,
             onDismiss = viewModel::dismissCreatePrDialog,
+        )
+    }
+
+    if (state.showArchiveDialog) {
+        ArchiveAgentDialog(
+            agentName = state.agentName,
+            onConfirm = viewModel::confirmArchive,
+            onDismiss = viewModel::dismissArchiveDialog,
         )
     }
 
@@ -483,6 +565,17 @@ fun AgentDetailScreen(agentId: String, onBack: () -> Unit) {
                     }
                 },
                 actions = {
+                    IconButton(onClick = viewModel::refresh) {
+                        Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
+                    }
+                    if (state.canArchive) {
+                        TextButton(
+                            onClick = viewModel::openArchiveDialog,
+                            enabled = !state.archiving,
+                        ) {
+                            Text(if (state.archiving) "Deactivating…" else "Deactivate")
+                        }
+                    }
                     if (state.transcript.isNotBlank()) {
                         TextButton(
                             onClick = { context.copyText("Transcript", state.transcript) },
@@ -499,15 +592,17 @@ fun AgentDetailScreen(agentId: String, onBack: () -> Unit) {
             )
         },
         bottomBar = {
-            FollowUpBar(
-                value = state.followUp,
-                selectedMode = state.selectedMode,
-                showModeChips = !state.isRepoLess,
-                sending = state.sending,
-                onValueChange = viewModel::onFollowUpChange,
-                onModeSelected = viewModel::onModeSelected,
-                onSend = viewModel::sendFollowUp,
-            )
+            if (!state.isArchived) {
+                FollowUpBar(
+                    value = state.followUp,
+                    selectedMode = state.selectedMode,
+                    showModeChips = !state.isRepoLess,
+                    sending = state.sending,
+                    onValueChange = viewModel::onFollowUpChange,
+                    onModeSelected = viewModel::onModeSelected,
+                    onSend = viewModel::sendFollowUp,
+                )
+            }
         },
     ) { padding ->
         Column(
@@ -523,7 +618,9 @@ fun AgentDetailScreen(agentId: String, onBack: () -> Unit) {
             Spacer(Modifier.height(8.dp))
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                StatusBadge(state.status)
+                StatusBadge(
+                    if (state.isArchived) AgentStatus.ARCHIVED else state.status,
+                )
                 Spacer(Modifier.weight(1f))
 
                 formatDuration(state.run?.durationMs)?.let { duration ->
@@ -592,6 +689,34 @@ fun AgentDetailScreen(agentId: String, onBack: () -> Unit) {
             )
         }
     }
+}
+
+@Composable
+private fun ArchiveAgentDialog(
+    agentName: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Deactivate this agent?") },
+        text = {
+            Text(
+                "“$agentName” will stop accepting new runs. " +
+                    "It stays in your list as archived.",
+            )
+        },
+        confirmButton = {
+            Button(onClick = onConfirm) {
+                Text("Deactivate")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
 }
 
 @Composable
