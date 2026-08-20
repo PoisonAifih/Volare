@@ -695,7 +695,7 @@ private fun Transcript(text: String, active: Boolean, modifier: Modifier = Modif
 
 @Composable
 private fun ToolActivity(tools: List<ToolLine>) {
-    Card(modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             tools.forEach { tool ->
                 Text(
