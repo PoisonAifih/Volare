@@ -178,6 +178,13 @@ data class IdResponse(
     val id: String,
 )
 
+object AgentStatus {
+    const val ACTIVE = "ACTIVE"
+    const val ARCHIVED = "ARCHIVED"
+
+    fun isArchived(status: String?): Boolean =
+        status != null && status.uppercase() == ARCHIVED
+}
 
 object RunStatus {
     const val CREATING = "CREATING"
