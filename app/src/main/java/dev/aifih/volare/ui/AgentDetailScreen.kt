@@ -90,7 +90,6 @@ data class AgentDetailUiState(
     val creatingPr: Boolean = false,
     val cancelling: Boolean = false,
     val archiving: Boolean = false,
-    val archiveDone: Boolean = false,
     val showCreatePrDialog: Boolean = false,
     val showArchiveDialog: Boolean = false,
     val error: String? = null,
@@ -481,8 +480,8 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
                     _state.update {
                         it.copy(
                             archiving = false,
-                            archiveDone = true,
                             agent = it.agent?.copy(status = AgentStatus.ARCHIVED),
+                            notice = "Agent deactivated. It stays in your list but will not accept new runs.",
                         )
                     }
                 },
@@ -508,11 +507,7 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AgentDetailScreen(
-    agentId: String,
-    onBack: () -> Unit,
-    onArchived: () -> Unit = onBack,
-) {
+fun AgentDetailScreen(agentId: String, onBack: () -> Unit) {
     val viewModel: AgentDetailViewModel = viewModel(
         factory = viewModelFactory {
             initializer { AgentDetailViewModel(agentId) }
@@ -523,10 +518,6 @@ fun AgentDetailScreen(
     val latest by rememberUpdatedState(state)
 
     LaunchedEffect(Unit) { RunWatchService.stop(context) }
-
-    LaunchedEffect(state.archiveDone) {
-        if (state.archiveDone) onArchived()
-    }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -582,7 +573,7 @@ fun AgentDetailScreen(
                             onClick = viewModel::openArchiveDialog,
                             enabled = !state.archiving,
                         ) {
-                            Text(if (state.archiving) "Closing…" else "Close")
+                            Text(if (state.archiving) "Deactivating…" else "Deactivate")
                         }
                     }
                     if (state.transcript.isNotBlank()) {
@@ -627,7 +618,9 @@ fun AgentDetailScreen(
             Spacer(Modifier.height(8.dp))
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                StatusBadge(state.status)
+                StatusBadge(
+                    if (state.isArchived) AgentStatus.ARCHIVED else state.status,
+                )
                 Spacer(Modifier.weight(1f))
 
                 formatDuration(state.run?.durationMs)?.let { duration ->
@@ -706,16 +699,16 @@ private fun ArchiveAgentDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Close this agent?") },
+        title = { Text("Deactivate this agent?") },
         text = {
             Text(
-                "“$agentName” will be archived. It stops accepting new runs and " +
-                    "disappears from your agent list. This can be undone on the web.",
+                "“$agentName” will stop accepting new runs. " +
+                    "It stays in your list as archived.",
             )
         },
         confirmButton = {
             Button(onClick = onConfirm) {
-                Text("Close agent")
+                Text("Deactivate")
             }
         },
         dismissButton = {
