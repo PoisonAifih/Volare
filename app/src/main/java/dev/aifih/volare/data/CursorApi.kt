@@ -60,6 +60,13 @@ class CursorApi(
             serializer = CreateAgentResponse.serializer(),
         )
 
+    suspend fun archiveAgent(agentId: String): IdResponse =
+        post(
+            path = "v1/agents/$agentId/archive",
+            body = EMPTY_BODY,
+            serializer = IdResponse.serializer(),
+        )
+
     suspend fun listRuns(agentId: String, limit: Int = 30): RunListResponse =
         get(
             path = "v1/agents/$agentId/runs",

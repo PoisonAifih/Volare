@@ -197,4 +197,12 @@ class DtoTest {
 
         assertFalse(RunStatus.isTerminal("PAUSED"))
     }
+
+    @Test
+    fun `archived agent status is recognised case-insensitively`() {
+        assertTrue(AgentStatus.isArchived("ARCHIVED"))
+        assertTrue(AgentStatus.isArchived("archived"))
+        assertFalse(AgentStatus.isArchived("ACTIVE"))
+        assertFalse(AgentStatus.isArchived(null))
+    }
 }
