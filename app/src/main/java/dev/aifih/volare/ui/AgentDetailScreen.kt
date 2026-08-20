@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -16,6 +17,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -24,7 +27,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -52,6 +54,7 @@ import dev.aifih.volare.ServiceLocator
 import dev.aifih.volare.data.Agent
 import dev.aifih.volare.data.AgentMode
 import dev.aifih.volare.data.CursorApiException
+import dev.aifih.volare.data.GitBranch
 import dev.aifih.volare.data.Run
 import dev.aifih.volare.data.RunEvent
 import dev.aifih.volare.data.RunStatus
@@ -84,6 +87,7 @@ data class AgentDetailUiState(
     val sending: Boolean = false,
     val creatingPr: Boolean = false,
     val cancelling: Boolean = false,
+    val showCreatePrDialog: Boolean = false,
     val error: String? = null,
     val notice: String? = null,
     val retry: AgentDetailRetry? = null,
@@ -92,11 +96,25 @@ data class AgentDetailUiState(
 
     val agentName: String get() = agent?.name ?: agent?.id ?: "Agent"
 
-    val prUrl: String? get() = run?.git?.branches?.firstNotNullOfOrNull { it.prUrl }
+    val isRepoLess: Boolean get() = agent?.repos.isNullOrEmpty()
 
-    val branch: String? get() = run?.git?.branches?.firstNotNullOfOrNull { it.branch }
+    val gitBranches: List<GitBranch> get() = run?.git?.branches.orEmpty()
 
-    val canCreatePr: Boolean get() = !isActive && branch != null && prUrl == null
+    val branchesWithPr: List<GitBranch> get() = gitBranches.filter { !it.prUrl.isNullOrBlank() }
+
+    val branch: String? get() = gitBranches.lastOrNull { !it.branch.isNullOrBlank() }?.branch
+        ?: gitBranches.firstOrNull()?.branch
+
+    val canCreatePr: Boolean get() = !isRepoLess && !isActive && branch != null && !creatingPr
+
+    val reviewSummary: String
+        get() {
+            val result = run?.result?.trim().orEmpty()
+            if (result.isNotEmpty()) return result
+            val text = transcript.trim()
+            if (text.isEmpty()) return "No summary yet."
+            return if (text.length <= 500) text else "…" + text.takeLast(500)
+        }
 }
 
 class AgentDetailViewModel(private val agentId: String) : ViewModel() {
@@ -245,6 +263,21 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
         _state.update { it.copy(selectedMode = mode) }
     }
 
+    fun openCreatePrDialog() {
+        val current = _state.value
+        if (!current.canCreatePr) return
+        _state.update { it.copy(showCreatePrDialog = true, notice = null, error = null) }
+    }
+
+    fun dismissCreatePrDialog() {
+        _state.update { it.copy(showCreatePrDialog = false) }
+    }
+
+    fun confirmCreatePullRequest() {
+        _state.update { it.copy(showCreatePrDialog = false) }
+        createPullRequest()
+    }
+
     fun sendFollowUp() {
         val current = _state.value
         val prompt = current.followUp.trim()
@@ -252,8 +285,10 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
 
         _state.update { it.copy(sending = true, error = null, notice = null, retry = null) }
 
+        val mode = if (current.isRepoLess) null else current.selectedMode.apiValue
+
         viewModelScope.launch {
-            runCatching { repository.createRun(agentId, prompt, current.selectedMode.apiValue) }.fold(
+            runCatching { repository.createRun(agentId, prompt, mode) }.fold(
                 onSuccess = { run ->
                     appendTranscript("\n\n> $prompt\n\n")
                     _state.update {
@@ -299,7 +334,15 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
         val current = _state.value
         if (!current.canCreatePr || current.creatingPr) return
 
-        _state.update { it.copy(creatingPr = true, error = null, notice = null, retry = null) }
+        _state.update {
+            it.copy(
+                creatingPr = true,
+                showCreatePrDialog = false,
+                error = null,
+                notice = null,
+                retry = null,
+            )
+        }
 
         viewModelScope.launch {
             runCatching {
@@ -354,7 +397,7 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
 
             AgentDetailRetry.ResendFollowUp -> sendFollowUp()
 
-            AgentDetailRetry.CreatePullRequest -> createPullRequest()
+            AgentDetailRetry.CreatePullRequest -> openCreatePrDialog()
 
             AgentDetailRetry.ReconnectStream -> {
                 val runId = _state.value.run?.id ?: return
@@ -413,6 +456,18 @@ fun AgentDetailScreen(agentId: String, onBack: () -> Unit) {
         }
     }
 
+    if (state.showCreatePrDialog) {
+        CreatePrReviewDialog(
+            branch = state.branch,
+            summary = state.reviewSummary,
+            tools = state.tools,
+            transcript = state.transcript,
+            existingPrCount = state.branchesWithPr.size,
+            onConfirm = viewModel::confirmCreatePullRequest,
+            onDismiss = viewModel::dismissCreatePrDialog,
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -429,6 +484,13 @@ fun AgentDetailScreen(agentId: String, onBack: () -> Unit) {
                     }
                 },
                 actions = {
+                    if (state.transcript.isNotBlank()) {
+                        TextButton(
+                            onClick = { context.copyText("Transcript", state.transcript) },
+                        ) {
+                            Text("Copy")
+                        }
+                    }
                     state.agent?.url?.let { url ->
                         TextButton(onClick = { context.openUrl(url) }) {
                             Text("Web")
@@ -441,6 +503,7 @@ fun AgentDetailScreen(agentId: String, onBack: () -> Unit) {
             FollowUpBar(
                 value = state.followUp,
                 selectedMode = state.selectedMode,
+                showModeChips = !state.isRepoLess,
                 sending = state.sending,
                 onValueChange = viewModel::onFollowUpChange,
                 onModeSelected = viewModel::onModeSelected,
@@ -505,14 +568,16 @@ fun AgentDetailScreen(agentId: String, onBack: () -> Unit) {
                 ToolActivity(state.tools)
             }
 
-            if (state.branch != null || state.prUrl != null || state.canCreatePr) {
+            if (!state.isRepoLess &&
+                (state.branch != null || state.branchesWithPr.isNotEmpty() || state.canCreatePr)
+            ) {
                 Spacer(Modifier.height(8.dp))
-                ResultLinks(
+                ResultLinksSection(
                     branch = state.branch,
-                    prUrl = state.prUrl,
+                    branchesWithPr = state.branchesWithPr,
                     canCreatePr = state.canCreatePr,
                     creatingPr = state.creatingPr,
-                    onCreatePr = viewModel::createPullRequest,
+                    onCreatePr = viewModel::openCreatePrDialog,
                     onOpenPr = { url -> context.openUrl(url) },
                 )
             }
@@ -528,6 +593,81 @@ fun AgentDetailScreen(agentId: String, onBack: () -> Unit) {
             )
         }
     }
+}
+
+@Composable
+private fun CreatePrReviewDialog(
+    branch: String?,
+    summary: String,
+    tools: List<ToolLine>,
+    transcript: String,
+    existingPrCount: Int,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Create pull request?") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                branch?.let {
+                    Text(
+                        text = "Branch: $it",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                }
+
+                if (existingPrCount > 0) {
+                    Text(
+                        text = "This agent already has $existingPrCount open pull request(s). " +
+                            "Creating another will start a new PR run.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                Text("Summary", style = MaterialTheme.typography.labelLarge)
+                Text(summary, style = MaterialTheme.typography.bodySmall)
+
+                if (tools.isNotEmpty()) {
+                    Text("Recent tools", style = MaterialTheme.typography.labelLarge)
+                    tools.forEach { tool ->
+                        Text(
+                            text = "${if (tool.status == "completed") "✓" else "…"} ${tool.name}",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                        )
+                    }
+                }
+
+                if (transcript.isNotBlank()) {
+                    Text("Transcript", style = MaterialTheme.typography.labelLarge)
+                    Text(
+                        text = transcript,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onConfirm) {
+                Text("Create pull request")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
 }
 
 @Composable
@@ -555,7 +695,7 @@ private fun Transcript(text: String, active: Boolean, modifier: Modifier = Modif
 
 @Composable
 private fun ToolActivity(tools: List<ToolLine>) {
-    Card(Modifier.fillMaxWidth()) {
+    Card(modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             tools.forEach { tool ->
                 Text(
@@ -572,9 +712,9 @@ private fun ToolActivity(tools: List<ToolLine>) {
 }
 
 @Composable
-private fun ResultLinks(
+private fun ResultLinksSection(
     branch: String?,
-    prUrl: String?,
+    branchesWithPr: List<GitBranch>,
     canCreatePr: Boolean,
     creatingPr: Boolean,
     onCreatePr: () -> Unit,
@@ -590,17 +730,20 @@ private fun ResultLinks(
             )
         }
 
-        when {
-            prUrl != null -> {
-                OutlinedButton(onClick = { onOpenPr(prUrl) }) {
-                    Text("Open pull request")
-                }
+        branchesWithPr.forEach { entry ->
+            val url = entry.prUrl ?: return@forEach
+            OutlinedButton(onClick = { onOpenPr(url) }) {
+                Text(
+                    text = entry.branch?.let { "Open PR ($it)" } ?: "Open pull request",
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
+        }
 
-            canCreatePr -> {
-                Button(onClick = onCreatePr, enabled = !creatingPr) {
-                    Text(if (creatingPr) "Creating pull request…" else "Create pull request")
-                }
+        if (canCreatePr) {
+            Button(onClick = onCreatePr, enabled = !creatingPr) {
+                Text(if (creatingPr) "Creating pull request…" else "Create pull request")
             }
         }
     }
@@ -610,6 +753,7 @@ private fun ResultLinks(
 private fun FollowUpBar(
     value: String,
     selectedMode: AgentMode,
+    showModeChips: Boolean,
     sending: Boolean,
     onValueChange: (String) -> Unit,
     onModeSelected: (AgentMode) -> Unit,
@@ -622,17 +766,19 @@ private fun FollowUpBar(
             .imePadding()
             .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            AgentMode.selectableModes.forEach { mode ->
-                FilterChip(
-                    selected = selectedMode == mode,
-                    onClick = { onModeSelected(mode) },
-                    label = { Text(mode.label) },
-                )
+        if (showModeChips) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AgentMode.selectableModes.forEach { mode ->
+                    FilterChip(
+                        selected = selectedMode == mode,
+                        onClick = { onModeSelected(mode) },
+                        label = { Text(mode.label) },
+                    )
+                }
             }
-        }
 
-        Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(8.dp))
+        }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
