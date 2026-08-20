@@ -17,6 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -171,6 +172,24 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
                 }
             }
         }
+    }
+
+    /** Reload agent + run and reconnect the stream, like leaving and re-opening this screen. */
+    fun refresh() {
+        if (_state.value.loading) return
+
+        streamJob?.cancel()
+        streamJob = null
+        transcript.clear()
+        _state.update {
+            it.copy(
+                transcript = "",
+                tools = emptyList(),
+                notice = null,
+                showCreatePrDialog = false,
+            )
+        }
+        load()
     }
 
     private fun startStreaming(runId: String) {
@@ -483,6 +502,9 @@ fun AgentDetailScreen(agentId: String, onBack: () -> Unit) {
                     }
                 },
                 actions = {
+                    IconButton(onClick = viewModel::refresh) {
+                        Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
+                    }
                     if (state.transcript.isNotBlank()) {
                         TextButton(
                             onClick = { context.copyText("Transcript", state.transcript) },
