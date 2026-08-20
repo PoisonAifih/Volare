@@ -46,8 +46,6 @@ class CursorApi(
             serializer = AgentListResponse.serializer(),
             query = buildMap {
                 put("limit", limit.toString())
-                // Default on the server is true; we only want open agents in the phone list.
-                put("includeArchived", "false")
                 if (cursor != null) put("cursor", cursor)
             },
         )
