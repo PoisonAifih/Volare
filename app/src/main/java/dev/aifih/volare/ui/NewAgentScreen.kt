@@ -25,7 +25,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -42,9 +44,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.aifih.volare.ServiceLocator
+import dev.aifih.volare.data.AgentKind
 import dev.aifih.volare.data.AgentMode
 import dev.aifih.volare.data.CreateAgentRequest
 import dev.aifih.volare.data.ModelInfo
+import dev.aifih.volare.data.ModelParam
 import dev.aifih.volare.data.ModelSelection
 import dev.aifih.volare.data.Prompt
 import dev.aifih.volare.data.RefreshTooSoonException
@@ -57,11 +61,13 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class NewAgentUiState(
+    val kind: AgentKind = AgentKind.CODING,
     val prompt: String = "",
     val repos: List<RepositoryItem> = emptyList(),
     val models: List<ModelInfo> = emptyList(),
     val selectedRepoUrl: String? = null,
     val selectedModelId: String? = null,
+    val selectedModelParams: Map<String, String> = emptyMap(),
     val startingRef: String = "main",
     val selectedMode: AgentMode = AgentMode.AGENT,
     val refreshingRepos: Boolean = false,
@@ -69,7 +75,10 @@ data class NewAgentUiState(
     val notice: String? = null,
     val error: String? = null,
     val submitRetry: Boolean = false,
-)
+) {
+    val selectedModel: ModelInfo?
+        get() = models.firstOrNull { it.id == selectedModelId }
+}
 
 class NewAgentViewModel : ViewModel() {
 
@@ -77,14 +86,32 @@ class NewAgentViewModel : ViewModel() {
 
     private val _state = MutableStateFlow(
         NewAgentUiState(
+            kind = repository.lastAgentKind,
             repos = repository.cachedRepositories(),
             models = repository.cachedModels(),
             selectedRepoUrl = repository.lastRepoUrl,
             selectedModelId = repository.lastModelId,
             selectedMode = repository.lastMode,
+            selectedModelParams = defaultParams(
+                repository.cachedModels().firstOrNull { it.id == repository.lastModelId },
+            ),
         ),
     )
     val state: StateFlow<NewAgentUiState> = _state.asStateFlow()
+
+    fun onKindSelected(kind: AgentKind) {
+        repository.lastAgentKind = kind
+        _state.update { it.copy(kind = kind, error = null, submitRetry = false) }
+        if (kind == AgentKind.CODING) {
+            viewModelScope.launch {
+                runCatching { repository.refreshRepositories(force = false) }
+                    .onSuccess { repos -> _state.update { it.copy(repos = repos) } }
+                    .onFailure { cause ->
+                        if (cause !is RefreshTooSoonException) reportRepoFailure(cause)
+                    }
+            }
+        }
+    }
 
     fun onPromptChange(value: String) =
         _state.update { it.copy(prompt = value, error = null, submitRetry = false) }
@@ -98,7 +125,19 @@ class NewAgentViewModel : ViewModel() {
 
     fun onModelSelected(id: String?) {
         repository.lastModelId = id
-        _state.update { it.copy(selectedModelId = id) }
+        val model = _state.value.models.firstOrNull { it.id == id }
+        _state.update {
+            it.copy(
+                selectedModelId = id,
+                selectedModelParams = defaultParams(model),
+            )
+        }
+    }
+
+    fun onModelParamSelected(paramId: String, value: String) {
+        _state.update {
+            it.copy(selectedModelParams = it.selectedModelParams + (paramId to value))
+        }
     }
 
     fun onModeSelected(mode: AgentMode) {
@@ -109,11 +148,28 @@ class NewAgentViewModel : ViewModel() {
     fun loadInitial() {
         viewModelScope.launch {
             runCatching { repository.refreshModels() }
-                .onSuccess { models -> _state.update { it.copy(models = models) } }
+                .onSuccess { models ->
+                    val selectedId = _state.value.selectedModelId
+                    val model = models.firstOrNull { it.id == selectedId }
+                    _state.update {
+                        it.copy(
+                            models = models,
+                            selectedModelParams = if (it.selectedModelParams.isEmpty()) {
+                                defaultParams(model)
+                            } else {
+                                it.selectedModelParams
+                            },
+                        )
+                    }
+                }
 
-            runCatching { repository.refreshRepositories(force = false) }
-                .onSuccess { repos -> _state.update { it.copy(repos = repos) } }
-                .onFailure { cause -> if (cause !is RefreshTooSoonException) reportRepoFailure(cause) }
+            if (_state.value.kind == AgentKind.CODING) {
+                runCatching { repository.refreshRepositories(force = false) }
+                    .onSuccess { repos -> _state.update { it.copy(repos = repos) } }
+                    .onFailure { cause ->
+                        if (cause !is RefreshTooSoonException) reportRepoFailure(cause)
+                    }
+            }
         }
     }
 
@@ -155,7 +211,7 @@ class NewAgentViewModel : ViewModel() {
             _state.update { it.copy(error = "Prompt is empty") }
             return
         }
-        if (current.selectedRepoUrl.isNullOrBlank()) {
+        if (current.kind == AgentKind.CODING && current.selectedRepoUrl.isNullOrBlank()) {
             _state.update { it.copy(error = "Pick a repository first") }
             return
         }
@@ -163,16 +219,34 @@ class NewAgentViewModel : ViewModel() {
         _state.update { it.copy(submitting = true, error = null, submitRetry = false) }
 
         viewModelScope.launch {
+            val modelSelection = current.selectedModelId?.let { id ->
+                val params = current.selectedModelParams.map { (paramId, value) ->
+                    ModelParam(paramId, value)
+                }
+                ModelSelection(
+                    id = id,
+                    params = params.takeIf { it.isNotEmpty() },
+                )
+            }
+
             val request = CreateAgentRequest(
                 prompt = Prompt(current.prompt.trim()),
-                model = current.selectedModelId?.let { ModelSelection(it) },
-                repos = listOf(
-                    RepoRef(
-                        url = current.selectedRepoUrl,
-                        startingRef = current.startingRef.trim().ifBlank { null },
-                    ),
-                ),
-                mode = current.selectedMode.apiValue,
+                model = modelSelection,
+                repos = if (current.kind == AgentKind.CODING) {
+                    listOf(
+                        RepoRef(
+                            url = current.selectedRepoUrl!!,
+                            startingRef = current.startingRef.trim().ifBlank { null },
+                        ),
+                    )
+                } else {
+                    null
+                },
+                mode = if (current.kind == AgentKind.CODING) {
+                    current.selectedMode.apiValue
+                } else {
+                    null
+                },
             )
 
             runCatching { repository.createAgent(request) }.fold(
@@ -201,6 +275,16 @@ class NewAgentViewModel : ViewModel() {
             )
         }
     }
+
+    private companion object {
+        fun defaultParams(model: ModelInfo?): Map<String, String> {
+            if (model == null) return emptyMap()
+            return model.parameters.mapNotNull { param ->
+                val value = param.values.firstOrNull()?.value ?: return@mapNotNull null
+                param.id to value
+            }.toMap()
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -210,6 +294,8 @@ fun NewAgentScreen(onBack: () -> Unit, onCreated: (String) -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) { viewModel.loadInitial() }
+
+    val selectedTabIndex = AgentKind.selectableKinds.indexOf(state.kind).coerceAtLeast(0)
 
     Scaffold(
         topBar = {
@@ -231,45 +317,88 @@ fun NewAgentScreen(onBack: () -> Unit, onCreated: (String) -> Unit) {
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
         ) {
+            PrimaryTabRow(selectedTabIndex = selectedTabIndex) {
+                AgentKind.selectableKinds.forEachIndexed { index, kind ->
+                    Tab(
+                        selected = selectedTabIndex == index,
+                        onClick = { viewModel.onKindSelected(kind) },
+                        text = { Text(kind.label) },
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
             OutlinedTextField(
                 value = state.prompt,
                 onValueChange = viewModel::onPromptChange,
                 label = { Text("Prompt") },
-                placeholder = { Text("For example: fix login validation and add tests") },
+                placeholder = {
+                    Text(
+                        if (state.kind == AgentKind.GENERAL) {
+                            "For example: explain the tradeoffs between REST and GraphQL"
+                        } else {
+                            "For example: fix login validation and add tests"
+                        },
+                    )
+                },
                 minLines = 4,
                 isError = state.error != null,
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            Spacer(Modifier.height(16.dp))
+            if (state.kind == AgentKind.CODING) {
+                Spacer(Modifier.height(16.dp))
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Repository", style = MaterialTheme.typography.labelLarge)
-                Spacer(Modifier.weight(1f))
-                IconButton(onClick = viewModel::refreshRepos, enabled = !state.refreshingRepos) {
-                    if (state.refreshingRepos) {
-                        CircularProgressIndicator(Modifier.height(16.dp), strokeWidth = 2.dp)
-                    } else {
-                        Icon(Icons.Filled.Refresh, contentDescription = "Refresh repository list")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Repository", style = MaterialTheme.typography.labelLarge)
+                    Spacer(Modifier.weight(1f))
+                    IconButton(
+                        onClick = viewModel::refreshRepos,
+                        enabled = !state.refreshingRepos,
+                    ) {
+                        if (state.refreshingRepos) {
+                            CircularProgressIndicator(Modifier.height(16.dp), strokeWidth = 2.dp)
+                        } else {
+                            Icon(Icons.Filled.Refresh, contentDescription = "Refresh repository list")
+                        }
                     }
                 }
-            }
 
-            PickerField(
-                label = state.repos
-                    .firstOrNull { it.url == state.selectedRepoUrl }
-                    ?.shortName
-                    ?: state.selectedRepoUrl
-                    ?: "Pick a repository",
-                options = state.repos.map { it.shortName to it.url },
-                onSelect = { url -> url?.let(viewModel::onRepoSelected) },
-            )
+                PickerField(
+                    label = state.repos
+                        .firstOrNull { it.url == state.selectedRepoUrl }
+                        ?.shortName
+                        ?: state.selectedRepoUrl
+                        ?: "Pick a repository",
+                    options = state.repos.map { it.shortName to it.url },
+                    onSelect = { url -> url?.let(viewModel::onRepoSelected) },
+                )
 
-            if (state.repos.isEmpty()) {
-                Spacer(Modifier.height(6.dp))
+                if (state.repos.isEmpty()) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "The repository list is not cached yet. Tap refresh once and wait — " +
+                            "this endpoint can take tens of seconds.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = state.startingRef,
+                    onValueChange = viewModel::onStartingRefChange,
+                    label = { Text("Starting branch") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "The repository list is not cached yet. Tap refresh once and wait — " +
-                        "this endpoint can take tens of seconds.",
+                    text = "General mode runs without a repository. Paste any question or text " +
+                        "and copy the answer from the agent detail screen.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -277,37 +406,25 @@ fun NewAgentScreen(onBack: () -> Unit, onCreated: (String) -> Unit) {
 
             Spacer(Modifier.height(16.dp))
 
-            OutlinedTextField(
-                value = state.startingRef,
-                onValueChange = viewModel::onStartingRefChange,
-                label = { Text("Starting branch") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
+            ModelPickerSection(
+                models = state.models,
+                selectedModelId = state.selectedModelId,
+                selectedModelParams = state.selectedModelParams,
+                onModelSelected = viewModel::onModelSelected,
+                onParamSelected = viewModel::onModelParamSelected,
             )
 
-            Spacer(Modifier.height(16.dp))
+            if (state.kind == AgentKind.CODING) {
+                Spacer(Modifier.height(16.dp))
 
-            Text("Model", style = MaterialTheme.typography.labelLarge)
-
-            PickerField(
-                label = state.models
-                    .firstOrNull { it.id == state.selectedModelId }
-                    ?.label
-                    ?: "Account default",
-                options = listOf("Account default" to null) +
-                    state.models.map { it.label to it.id },
-                onSelect = viewModel::onModelSelected,
-            )
-
-            Spacer(Modifier.height(16.dp))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                AgentMode.selectableModes.forEach { mode ->
-                    FilterChip(
-                        selected = state.selectedMode == mode,
-                        onClick = { viewModel.onModeSelected(mode) },
-                        label = { Text(mode.label) },
-                    )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AgentMode.selectableModes.forEach { mode ->
+                        FilterChip(
+                            selected = state.selectedMode == mode,
+                            onClick = { viewModel.onModeSelected(mode) },
+                            label = { Text(mode.label) },
+                        )
+                    }
                 }
             }
 
@@ -344,6 +461,49 @@ fun NewAgentScreen(onBack: () -> Unit, onCreated: (String) -> Unit) {
 
             Spacer(Modifier.height(32.dp))
         }
+    }
+}
+
+@Composable
+private fun ModelPickerSection(
+    models: List<ModelInfo>,
+    selectedModelId: String?,
+    selectedModelParams: Map<String, String>,
+    onModelSelected: (String?) -> Unit,
+    onParamSelected: (String, String) -> Unit,
+) {
+    val selectedModel = models.firstOrNull { it.id == selectedModelId }
+
+    Text("Model", style = MaterialTheme.typography.labelLarge)
+
+    Spacer(Modifier.height(8.dp))
+
+    PickerField(
+        label = selectedModel?.label ?: "Account default",
+        options = listOf("Account default" to null) + models.map { it.label to it.id },
+        onSelect = onModelSelected,
+    )
+
+    selectedModel?.parameters?.forEach { parameter ->
+        Spacer(Modifier.height(12.dp))
+        Text(
+            text = parameter.displayName ?: parameter.id,
+            style = MaterialTheme.typography.labelMedium,
+        )
+        Spacer(Modifier.height(4.dp))
+        val selectedValue = selectedModelParams[parameter.id]
+        val selectedLabel = parameter.values
+            .firstOrNull { it.value == selectedValue }
+            ?.let { it.displayName ?: it.value }
+            ?: selectedValue
+            ?: "Pick a value"
+        PickerField(
+            label = selectedLabel,
+            options = parameter.values.map { (it.displayName ?: it.value) to it.value },
+            onSelect = { value ->
+                if (value != null) onParamSelected(parameter.id, value)
+            },
+        )
     }
 }
 

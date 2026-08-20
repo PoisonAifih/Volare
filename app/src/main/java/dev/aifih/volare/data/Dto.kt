@@ -240,3 +240,18 @@ enum class AgentMode(val apiValue: String?, val label: String) {
         }
     }
 }
+
+enum class AgentKind(val prefsValue: String, val label: String) {
+    CODING("coding", "Coding"),
+    GENERAL("general", "General"),
+    ;
+
+    companion object {
+        val selectableKinds: List<AgentKind> = entries
+
+        fun fromString(value: String?): AgentKind = when (value) {
+            GENERAL.prefsValue -> GENERAL
+            else -> CODING
+        }
+    }
+}
