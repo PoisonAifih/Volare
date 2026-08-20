@@ -114,7 +114,7 @@ class DtoTest {
         val encoded = json.encodeToString(CreateAgentRequest.serializer(), request)
 
         assertFalse(encoded.contains("repos"))
-        assertFalse(encoded.contains("mode"))
+        assertFalse(encoded.contains("\"mode\""))
         assertTrue(encoded.contains("\"id\":\"composer-1\""))
     }
 
