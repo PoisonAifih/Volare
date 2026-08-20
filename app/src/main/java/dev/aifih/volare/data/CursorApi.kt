@@ -166,6 +166,7 @@ class CursorApi(
         const val BASE_URL = "https://api.cursor.com/"
 
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
-        private val EMPTY_BODY = ByteArray(0).toRequestBody(JSON_MEDIA_TYPE)
+        // API rejects a zero-length body with "body json cannot be empty".
+        private val EMPTY_BODY = "{}".toRequestBody(JSON_MEDIA_TYPE)
     }
 }

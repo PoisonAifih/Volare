@@ -106,6 +106,73 @@ class DtoTest {
     }
 
     @Test
+    fun `no-repo create request omits repos entirely`() {
+        val request = CreateAgentRequest(
+            prompt = Prompt("Explain CAP theorem"),
+            model = ModelSelection("composer-1"),
+        )
+
+        val encoded = json.encodeToString(CreateAgentRequest.serializer(), request)
+
+        assertFalse(encoded.contains("repos"))
+        assertFalse(encoded.contains("\"mode\""))
+        assertTrue(encoded.contains("\"id\":\"composer-1\""))
+    }
+
+    @Test
+    fun `model selection encodes parameters`() {
+        val selection = ModelSelection(
+            id = "claude-4-sonnet-thinking",
+            params = listOf(ModelParam("reasoning", "high")),
+        )
+
+        val encoded = json.encodeToString(ModelSelection.serializer(), selection)
+
+        assertTrue(encoded.contains("\"id\":\"claude-4-sonnet-thinking\""))
+        assertTrue(encoded.contains("\"id\":\"reasoning\""))
+        assertTrue(encoded.contains("\"value\":\"high\""))
+    }
+
+    @Test
+    fun `agent kind prefs round trip`() {
+        assertEquals(AgentKind.CODING, AgentKind.fromString(null))
+        assertEquals(AgentKind.GENERAL, AgentKind.fromString("general"))
+        assertEquals(AgentKind.CODING, AgentKind.fromString("coding"))
+        assertEquals(
+            listOf(AgentKind.CODING, AgentKind.GENERAL),
+            AgentKind.selectableKinds,
+        )
+    }
+
+    @Test
+    fun `git info can expose multiple pull requests`() {
+        val payload = """
+            {
+              "id": "run-1",
+              "status": "FINISHED",
+              "git": {
+                "branches": [
+                  {
+                    "branch": "cursor/first-aaaa",
+                    "prUrl": "https://github.com/owner/repo/pull/1"
+                  },
+                  {
+                    "branch": "cursor/second-bbbb",
+                    "prUrl": "https://github.com/owner/repo/pull/2"
+                  }
+                ]
+              }
+            }
+        """.trimIndent()
+
+        val run = json.decodeFromString(Run.serializer(), payload)
+        val urls = run.git?.branches?.mapNotNull { it.prUrl }.orEmpty()
+
+        assertEquals(2, urls.size)
+        assertEquals("https://github.com/owner/repo/pull/2", urls.last())
+    }
+
+    @Test
     fun `repository url renders as owner slash name`() {
         assertEquals(
             "PoisonAifih/Volare",
