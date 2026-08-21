@@ -173,6 +173,15 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
 
             _state.update { it.copy(agent = agent, loading = false) }
 
+            if (AgentStatus.isArchived(agent.status)) {
+                // Deactivated agents must not keep a local chat cache.
+                repository.deleteTranscript(agentId)
+                transcript.clear()
+                _state.update { it.copy(transcript = "") }
+            } else {
+                restoreCachedTranscript()
+            }
+
             val runId = agent.latestRunId
             if (runId == null) {
                 _state.update { it.copy(status = null) }
@@ -184,8 +193,14 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
                 _state.update { it.copy(run = run, status = run.status) }
 
                 if (RunStatus.isTerminal(run.status)) {
-                    run.result?.let { appendTranscript(it) }
+                    if (transcript.isBlank()) {
+                        run.result?.let { appendTranscript(it) }
+                    } else {
+                        persistTranscriptIfActive()
+                    }
                 } else {
+                    // Live SSE may replay from the start; drop cache to avoid duplicates.
+                    clearTranscriptBuffer()
                     startStreaming(runId)
                 }
             }
@@ -267,6 +282,8 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
 
         if (terminal && transcript.isBlank()) {
             run.result?.let { appendTranscript(it) }
+        } else if (terminal) {
+            persistTranscriptIfActive()
         }
 
         _state.update {
@@ -289,9 +306,32 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
         }
     }
 
+    private fun restoreCachedTranscript() {
+        val cached = repository.loadTranscript(agentId) ?: return
+        transcript.clear()
+        transcript.append(cached)
+        _state.update { it.copy(transcript = cached) }
+    }
+
+    private fun clearTranscriptBuffer() {
+        transcript.clear()
+        _state.update { it.copy(transcript = "") }
+    }
+
     private fun appendTranscript(text: String) {
         transcript.append(text)
         _state.update { it.copy(transcript = transcript.toString()) }
+        persistTranscriptIfActive()
+    }
+
+    private fun persistTranscriptIfActive() {
+        if (AgentStatus.isArchived(_state.value.agent?.status)) return
+        repository.saveTranscript(agentId, transcript.toString())
+    }
+
+    override fun onCleared() {
+        persistTranscriptIfActive()
+        super.onCleared()
     }
 
     fun onFollowUpChange(value: String) =

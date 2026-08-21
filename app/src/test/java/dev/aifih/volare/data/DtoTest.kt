@@ -205,4 +205,39 @@ class DtoTest {
         assertFalse(AgentStatus.isArchived("ACTIVE"))
         assertFalse(AgentStatus.isArchived(null))
     }
+
+    @Test
+    fun `active agent status is the inverse of archived`() {
+        assertTrue(AgentStatus.isActive("ACTIVE"))
+        assertTrue(AgentStatus.isActive(null))
+        assertFalse(AgentStatus.isActive("ARCHIVED"))
+    }
+
+    @Test
+    fun `agents sort with active first then deactivated`() {
+        val archivedOld = Agent(
+            id = "a1",
+            status = AgentStatus.ARCHIVED,
+            updatedAt = "2024-01-01T00:00:00Z",
+        )
+        val activeNew = Agent(
+            id = "a2",
+            status = AgentStatus.ACTIVE,
+            updatedAt = "2024-06-01T00:00:00Z",
+        )
+        val activeOld = Agent(
+            id = "a3",
+            status = AgentStatus.ACTIVE,
+            updatedAt = "2024-02-01T00:00:00Z",
+        )
+        val archivedNew = Agent(
+            id = "a4",
+            status = AgentStatus.ARCHIVED,
+            updatedAt = "2024-07-01T00:00:00Z",
+        )
+
+        val sorted = listOf(archivedOld, activeNew, activeOld, archivedNew).sortedActiveFirst()
+
+        assertEquals(listOf("a2", "a3", "a4", "a1"), sorted.map { it.id })
+    }
 }
