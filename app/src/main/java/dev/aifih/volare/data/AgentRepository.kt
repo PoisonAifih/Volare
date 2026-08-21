@@ -87,7 +87,13 @@ class AgentRepository(
     suspend fun getRun(agentId: String, runId: String): Run = api.getRun(agentId, runId)
 
     suspend fun createAgent(request: CreateAgentRequest): CreateAgentResponse =
-        api.createAgent(request)
+        api.createAgent(
+            request.copy(
+                prompt = request.prompt.copy(
+                    text = VolarePrompt.withCommitHint(request.prompt.text),
+                ),
+            ),
+        )
 
     suspend fun createRun(
         agentId: String,
@@ -95,7 +101,7 @@ class AgentRepository(
         mode: String? = null,
     ): Run = api.createRun(
         agentId,
-        CreateRunRequest(Prompt(prompt), mode),
+        CreateRunRequest(Prompt(VolarePrompt.withCommitHint(prompt)), mode),
     ).run
 
     suspend fun cancelRun(agentId: String, runId: String) {
