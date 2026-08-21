@@ -184,7 +184,16 @@ object AgentStatus {
 
     fun isArchived(status: String?): Boolean =
         status != null && status.uppercase() == ARCHIVED
+
+    fun isActive(status: String?): Boolean = !isArchived(status)
 }
+
+/** Active agents first, then deactivated; within each group newest update first. */
+fun List<Agent>.sortedActiveFirst(): List<Agent> =
+    sortedWith(
+        compareBy<Agent> { AgentStatus.isArchived(it.status) }
+            .thenByDescending { it.updatedAt ?: it.createdAt.orEmpty() },
+    )
 
 object RunStatus {
     const val CREATING = "CREATING"
