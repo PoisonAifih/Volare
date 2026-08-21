@@ -31,6 +31,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -48,6 +49,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.aifih.volare.ServiceLocator
 import dev.aifih.volare.data.Agent
+import dev.aifih.volare.data.AgentStatus
+import dev.aifih.volare.data.sortedActiveFirst
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -56,15 +59,30 @@ import kotlinx.coroutines.launch
 
 data class AgentListUiState(
     val agents: List<Agent> = emptyList(),
+    val showDeactivated: Boolean = false,
     val loading: Boolean = false,
     val loadingMore: Boolean = false,
     val nextCursor: String? = null,
     val error: String? = null,
-)
+) {
+    val visibleAgents: List<Agent>
+        get() = if (showDeactivated) {
+            agents
+        } else {
+            agents.filterNot { AgentStatus.isArchived(it.status) }
+        }
+
+    val hasHiddenDeactivated: Boolean
+        get() = !showDeactivated && agents.any { AgentStatus.isArchived(it.status) }
+}
 
 class AgentListViewModel : ViewModel() {
 
-    private val _state = MutableStateFlow(AgentListUiState())
+    private val repository = ServiceLocator.repository
+
+    private val _state = MutableStateFlow(
+        AgentListUiState(showDeactivated = repository.showDeactivatedAgents),
+    )
     val state: StateFlow<AgentListUiState> = _state.asStateFlow()
 
     fun refresh() {
@@ -72,11 +90,11 @@ class AgentListViewModel : ViewModel() {
         _state.update { it.copy(loading = true, error = null) }
 
         viewModelScope.launch {
-            runCatching { ServiceLocator.repository.listAgents() }.fold(
+            runCatching { repository.listAgents() }.fold(
                 onSuccess = { response ->
                     _state.update {
                         it.copy(
-                            agents = response.items,
+                            agents = response.items.sortedActiveFirst(),
                             nextCursor = response.nextCursor,
                             loading = false,
                         )
@@ -97,11 +115,11 @@ class AgentListViewModel : ViewModel() {
         _state.update { it.copy(loadingMore = true) }
 
         viewModelScope.launch {
-            runCatching { ServiceLocator.repository.listAgents(cursor) }.fold(
+            runCatching { repository.listAgents(cursor) }.fold(
                 onSuccess = { response ->
                     _state.update {
                         it.copy(
-                            agents = it.agents + response.items,
+                            agents = (it.agents + response.items).sortedActiveFirst(),
                             nextCursor = response.nextCursor,
                             loadingMore = false,
                         )
@@ -114,6 +132,12 @@ class AgentListViewModel : ViewModel() {
                 },
             )
         }
+    }
+
+    fun toggleShowDeactivated() {
+        val next = !_state.value.showDeactivated
+        repository.showDeactivatedAgents = next
+        _state.update { it.copy(showDeactivated = next) }
     }
 }
 
@@ -136,6 +160,12 @@ fun AgentListScreen(
             TopAppBar(
                 title = { Text("Agents") },
                 actions = {
+                    TextButton(onClick = viewModel::toggleShowDeactivated) {
+                        Text(
+                            if (state.showDeactivated) "Hide deactivated" else "Show deactivated",
+                        )
+                    }
+
                     IconButton(onClick = viewModel::refresh) {
                         Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
                     }
@@ -188,10 +218,15 @@ fun AgentListScreen(
                     CircularProgressIndicator(Modifier.align(Alignment.Center))
                 }
 
-                state.agents.isEmpty() -> {
+                state.visibleAgents.isEmpty() -> {
+                    val message = when {
+                        state.error != null -> state.error
+                        state.hasHiddenDeactivated ->
+                            "No active agents. Tap \"Show deactivated\" to see archived ones."
+                        else -> "No agents yet. Tap the add button to send your first prompt."
+                    }
                     EmptyOrError(
-                        message = state.error
-                            ?: "No agents yet. Tap the add button to send your first prompt.",
+                        message = message!!,
                         isError = state.error != null,
                         onRetry = viewModel::refresh,
                         modifier = Modifier.align(Alignment.Center),
@@ -213,7 +248,7 @@ fun AgentListScreen(
                             }
                         }
 
-                        items(state.agents, key = { it.id }) { agent ->
+                        items(state.visibleAgents, key = { it.id }) { agent ->
                             AgentCard(agent = agent, onClick = { onOpenAgent(agent.id) })
                         }
 
