@@ -3,9 +3,11 @@ package dev.aifih.volare
 import android.content.Context
 import android.content.SharedPreferences
 import dev.aifih.volare.data.AgentRepository
+import dev.aifih.volare.data.AgentTranscriptStore
 import dev.aifih.volare.data.ApiKeyStore
 import dev.aifih.volare.data.CursorApi
 import dev.aifih.volare.data.RunStream
+import java.io.File
 import java.util.concurrent.TimeUnit
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
@@ -54,7 +56,9 @@ object ServiceLocator {
             apiKeyProvider = { apiKeyStore.get() },
         )
 
-        repository = AgentRepository(api, prefs, json)
+        // Kept beside volare_cache prefs and wiped by AgentRepository.clearCache() on sign-out.
+        val transcriptDir = File(context.filesDir, "volare_cache_transcripts")
+        repository = AgentRepository(api, prefs, json, AgentTranscriptStore(transcriptDir))
 
         runStream = RunStream(
             api = api,

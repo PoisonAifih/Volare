@@ -12,6 +12,7 @@ class AgentRepository(
     private val api: CursorApi,
     private val prefs: SharedPreferences,
     private val json: Json,
+    private val transcriptStore: AgentTranscriptStore,
 ) {
 
     fun cachedRepositories(): List<RepositoryItem> =
@@ -64,6 +65,17 @@ class AgentRepository(
         get() = AgentKind.fromString(prefs.getString(KEY_LAST_KIND, null))
         set(value) = prefs.edit().putString(KEY_LAST_KIND, value.prefsValue).apply()
 
+    /** When false, the agents list hides deactivated (ARCHIVED) agents. */
+    var showDeactivatedAgents: Boolean
+        get() = prefs.getBoolean(KEY_SHOW_DEACTIVATED, false)
+        set(value) = prefs.edit().putBoolean(KEY_SHOW_DEACTIVATED, value).apply()
+
+    fun loadTranscript(agentId: String): String? = transcriptStore.load(agentId)
+
+    fun saveTranscript(agentId: String, text: String) = transcriptStore.save(agentId, text)
+
+    fun deleteTranscript(agentId: String) = transcriptStore.delete(agentId)
+
     suspend fun me(): MeResponse = api.me()
 
     suspend fun listAgents(cursor: String? = null): AgentListResponse = api.listAgents(cursor = cursor)
@@ -92,6 +104,7 @@ class AgentRepository(
 
     suspend fun archiveAgent(agentId: String) {
         api.archiveAgent(agentId)
+        transcriptStore.delete(agentId)
     }
 
     /**
@@ -101,6 +114,7 @@ class AgentRepository(
      */
     fun clearCache() {
         prefs.edit().clear().apply()
+        transcriptStore.clear()
     }
 
     private fun <T> decode(
@@ -132,6 +146,7 @@ class AgentRepository(
         const val KEY_LAST_MODEL = "last_model_id"
         const val KEY_LAST_MODE = "last_mode"
         const val KEY_LAST_KIND = "last_agent_kind"
+        const val KEY_SHOW_DEACTIVATED = "show_deactivated_agents"
 
         const val REPOS_MIN_INTERVAL_MS = 65_000L
         const val REPOS_TTL_MS = 6 * 60 * 60 * 1000L
