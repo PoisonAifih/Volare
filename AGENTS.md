@@ -48,6 +48,15 @@ To bump a version, edit `gradle/libs.versions.toml` only; never write versions d
 - Window insets are handled in Compose, not by the system. `MainActivity` calls
   `enableEdgeToEdge()`, so any bar pinned to the bottom needs `navigationBarsPadding()` then
   `imePadding()`, and a screen without a `Scaffold` needs `safeDrawingPadding()`.
+- Code comments: default to none. If a comment is necessary, use a single `//` line only.
+  Do not add multi-line `/* */` or `/** */` comments. Do not restate what the code already
+  says. Do not mass-delete existing comments unless the task asks for a cleanup.
+- Git authorship: every `git commit` must set the author to
+  `PoisonAifih <97334169+PoisonAifih@users.noreply.github.com>` via `--author` (or equivalent).
+  Do not leave the default `Cursor Agent <cursoragent@cursor.com>` as the commit author.
+  Do not disable `commit.gpgsign` or change the platform signing key. Do not permanently
+  rewrite global `~/.gitconfig`. Hosted Cloud Agent push and PR creation may still use the
+  Cursor GitHub App; squash-merge on GitHub keeps the final history under the human account.
 
 ## Things you must not do
 
@@ -145,3 +154,8 @@ short prompt and little context.
   evidence that the build and tests pass.
 - If the prompt is ambiguous, take the simplest interpretation, do the work, then state your
   assumptions in the PR description.
+- When committing, always pass
+  `--author="PoisonAifih <97334169+PoisonAifih@users.noreply.github.com>"`.
+  Prefer no new comments; if one is required, keep it to a single line.
+- If the prompt includes a Volare note to append `[via Volare]`, put that tag in the commit
+  message body (alongside other trailers). Do not strip it.
