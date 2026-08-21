@@ -157,3 +157,5 @@ short prompt and little context.
 - When committing, always pass
   `--author="PoisonAifih <97334169+PoisonAifih@users.noreply.github.com>"`.
   Prefer no new comments; if one is required, keep it to a single line.
+- If the prompt includes a Volare note to append `[via Volare]`, put that tag in the commit
+  message body (alongside other trailers). Do not strip it.
