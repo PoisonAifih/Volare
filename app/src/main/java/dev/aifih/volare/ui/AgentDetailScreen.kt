@@ -92,6 +92,12 @@ data class AgentDetailUiState(
     val archiving: Boolean = false,
     val showCreatePrDialog: Boolean = false,
     val showArchiveDialog: Boolean = false,
+    /**
+     * True after the user sends a follow-up once a PR already exists.
+     * Cleared when a new PR run is started, so Create PR stays hidden
+     * until there is fresh work to publish.
+     */
+    val hasChangesSincePr: Boolean = false,
     val error: String? = null,
     val notice: String? = null,
     val retry: AgentDetailRetry? = null,
@@ -110,10 +116,15 @@ data class AgentDetailUiState(
 
     val branchesWithPr: List<GitBranch> get() = gitBranches.filter { !it.prUrl.isNullOrBlank() }
 
+    val hasExistingPr: Boolean get() = branchesWithPr.isNotEmpty()
+
     val branch: String? get() = gitBranches.lastOrNull { !it.branch.isNullOrBlank() }?.branch
         ?: gitBranches.firstOrNull()?.branch
 
-    val canCreatePr: Boolean get() = !isRepoLess && !isActive && branch != null && !creatingPr
+    /** Show Create PR when there is a branch and either no PR yet, or new work since the last PR. */
+    val canCreatePr: Boolean
+        get() = !isRepoLess && !isActive && branch != null && !creatingPr &&
+            (!hasExistingPr || hasChangesSincePr)
 
     val reviewSummary: String
         get() {
@@ -195,6 +206,7 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
                 notice = null,
                 showCreatePrDialog = false,
                 showArchiveDialog = false,
+                hasChangesSincePr = false,
             )
         }
         load()
@@ -325,6 +337,9 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
                             run = run,
                             status = run.status,
                             tools = emptyList(),
+                            // A follow-up may produce new commits; allow Create PR again
+                            // even if an earlier PR already exists.
+                            hasChangesSincePr = true,
                         )
                     }
                     startStreaming(run.id)
@@ -383,6 +398,7 @@ class AgentDetailViewModel(private val agentId: String) : ViewModel() {
                     _state.update {
                         it.copy(
                             creatingPr = false,
+                            hasChangesSincePr = false,
                             run = run,
                             status = run.status,
                             tools = emptyList(),
