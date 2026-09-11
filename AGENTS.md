@@ -159,3 +159,5 @@ short prompt and little context.
   Prefer no new comments; if one is required, keep it to a single line.
 - If the prompt includes a Volare note to append `[via Volare]`, put that tag in the commit
   message body (alongside other trailers). Do not strip it.
+- Never add `Co-authored-by: Cursor`, `Made-with: Cursor`, or any other Cursor attribution
+  trailer to commits or pull requests. If tooling injects them, strip those lines before push.
