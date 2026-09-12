@@ -3,4 +3,8 @@ set -euo pipefail
 
 msg_file="$1"
 
-perl -0pi -e 's/^(?:Co-authored-by|Made-with|Signed-off-by):[^\n]*[Cc]ursor[^\n]*\r?\n//gm; s/\n+\z/\n/' "$msg_file"
+perl -0pi -e '
+  s/^Co-authored-by:[^\n]*\r?\n//gmi;
+  s/^(?:Made-with|Signed-off-by):[^\n]*[Cc]ursor[^\n]*\r?\n//gmi;
+  s/\n+\z/\n/
+' "$msg_file"

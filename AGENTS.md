@@ -57,11 +57,15 @@ To bump a version, edit `gradle/libs.versions.toml` only; never write versions d
   Do not disable `commit.gpgsign` or change the platform signing key. Do not permanently
   rewrite global `~/.gitconfig`. Hosted Cloud Agent push and PR creation may still use the
   Cursor GitHub App; squash-merge on GitHub keeps the final history under the human account.
-- `.githooks/commit-msg` strips any `Co-authored-by:`, `Made-with:`, or `Signed-off-by:` line
-  naming Cursor. `.cursor/install.sh` activates it with `core.hooksPath` and sets the local
-  author identity, so a Cloud Agent inherits both. Run `git config core.hooksPath .githooks`
-  once on a new clone. `scripts/check-attribution.sh` fails CI if Cursor attribution reaches
-  a commit anyway; do not remove the `attribution` job from `ci.yml`.
+- No commit carries a `Co-authored-by:` trailer, not even for the repository owner.
+  `.githooks/commit-msg` strips every `Co-authored-by:` line, plus any `Made-with:` or
+  `Signed-off-by:` line naming Cursor. `.cursor/install.sh` activates it with
+  `core.hooksPath` and sets the local author identity, so a Cloud Agent inherits both. Run
+  `git config core.hooksPath .githooks` once on a new clone.
+- `scripts/check-attribution.sh` fails CI on any Cursor identity anywhere in history, and on
+  any `Co-authored-by:` trailer added after the commit in `scripts/attribution-baseline`.
+  Commits before that baseline keep their owner co-author lines. Do not remove the
+  `attribution` job from `ci.yml`.
 
 ## Things you must not do
 
@@ -164,5 +168,6 @@ short prompt and little context.
   Prefer no new comments; if one is required, keep it to a single line.
 - If the prompt includes a Volare note to append `[via Volare]`, put that tag in the commit
   message body (alongside other trailers). Do not strip it.
-- Never add `Co-authored-by: Cursor`, `Made-with: Cursor`, or any other Cursor attribution
-  trailer to commits or pull requests. If tooling injects them, strip those lines before push.
+- Never add a `Co-authored-by:` trailer of any kind, nor `Made-with: Cursor` or any other
+  Cursor attribution trailer, to commits or pull requests. If tooling injects them, strip
+  those lines before push.
