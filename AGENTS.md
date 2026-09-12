@@ -57,6 +57,11 @@ To bump a version, edit `gradle/libs.versions.toml` only; never write versions d
   Do not disable `commit.gpgsign` or change the platform signing key. Do not permanently
   rewrite global `~/.gitconfig`. Hosted Cloud Agent push and PR creation may still use the
   Cursor GitHub App; squash-merge on GitHub keeps the final history under the human account.
+- `.githooks/commit-msg` strips any `Co-authored-by:`, `Made-with:`, or `Signed-off-by:` line
+  naming Cursor. `.cursor/install.sh` activates it with `core.hooksPath` and sets the local
+  author identity, so a Cloud Agent inherits both. Run `git config core.hooksPath .githooks`
+  once on a new clone. `scripts/check-attribution.sh` fails CI if Cursor attribution reaches
+  a commit anyway; do not remove the `attribution` job from `ci.yml`.
 
 ## Things you must not do
 

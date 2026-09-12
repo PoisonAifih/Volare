@@ -19,6 +19,13 @@ class VolarePromptTest {
     }
 
     @Test
+    fun withCommitHint_forbidsCommittingAsCursorAgent() {
+        val result = VolarePrompt.withCommitHint("Fix the login bug")
+        assertTrue(result.contains("Do not author or commit as Cursor Agent"))
+        assertTrue(result.contains("cursoragent@cursor.com"))
+    }
+
+    @Test
     fun withCommitHint_doesNotDuplicateWhenTagAndMarkerAlreadyPresent() {
         val prompt = "Ship it\n\n${VolarePrompt.COMMIT_TAG}\n${VolarePrompt.NO_CURSOR_COAUTHOR_MARKER}"
         assertEquals(prompt, VolarePrompt.withCommitHint(prompt))

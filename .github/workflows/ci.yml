@@ -6,6 +6,16 @@ on:
   pull_request:
 
 jobs:
+  attribution:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reject Cursor attribution
+        run: bash scripts/check-attribution.sh
+
   build:
     runs-on: ubuntu-latest
     steps:

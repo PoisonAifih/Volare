@@ -4,6 +4,14 @@ set -euo pipefail
 SDK_ROOT="${ANDROID_SDK_ROOT:-$HOME/android-sdk}"
 CMDLINE_TOOLS_ZIP="commandlinetools-linux-13114758_latest.zip"
 
+# Commit attribution
+if [ -d .git ]; then
+  chmod +x .githooks/* scripts/*.sh 2>/dev/null || true
+  git config core.hooksPath .githooks
+  git config user.name "PoisonAifih"
+  git config user.email "97334169+PoisonAifih@users.noreply.github.com"
+fi
+
 if [ ! -x "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
   echo "Memasang Android command line tools ke $SDK_ROOT"
 
